@@ -1,0 +1,16 @@
+# Local config — contains the private GAS Web App URL.
+# NEVER commit this file.
+config.js
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dependencies (if build tools are ever added)
+node_modules/

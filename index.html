@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#4A90E2">
+  <meta name="description" content="הארנק שלי - אפליקציית ניהול כסף לילדים">
+
+  <!-- PWA / iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="הארנק שלי">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <title>הארנק שלי</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/themes.css">
+  <link rel="stylesheet" href="css/components.css">
+</head>
+<body class="theme-sea-hero">
+
+  <!-- Loading overlay — shown until app.js takes over -->
+  <div id="app-loading" aria-label="טוען...">
+    <div class="spinner" role="status"></div>
+    <p class="loading-text">הארנק שלי טוען...</p>
+  </div>
+
+  <!-- App root — all views are rendered here by app.js -->
+  <main id="app" role="main" aria-live="polite"></main>
+
+  <!--
+    config.js — LOCAL DEVELOPMENT ONLY.
+    This file is git-ignored and never deployed to GitHub Pages.
+    On production devices, the GAS URL is entered by the parent
+    during first setup and stored in localStorage by api.js.
+    If config.js is absent (normal on GitHub Pages), the app
+    routes to the URL-entry setup screen automatically.
+  -->
+  <script src="config.js" onerror="window.__configMissing = true"></script>
+
+  <!-- Core utilities (no DOM dependency) -->
+  <script src="js/currency.js"></script>
+  <script src="js/i18n.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/auth.js"></script>
+
+  <!-- Views (stubs in Phase 0) -->
+  <script src="js/views/setup.js"></script>
+  <script src="js/views/child-dashboard.js"></script>
+  <script src="js/views/parent-dashboard.js"></script>
+
+  <!-- Router + init — must be last -->
+  <script src="js/app.js"></script>
+
+</body>
+</html>

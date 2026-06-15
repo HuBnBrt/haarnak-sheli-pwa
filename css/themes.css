@@ -1,0 +1,93 @@
+/* ─────────────────────────────────────────────────────────────
+   themes.css — Color palettes
+   Applied as a class on <body>: class="theme-sea-hero"
+   Four palettes, each defined as CSS custom properties.
+   ───────────────────────────────────────────────────────────── */
+
+/* ── 1. ים וגיבור (Sea & Hero) — Blue / Turquoise / Orange ── */
+.theme-sea-hero {
+  --color-primary:      #2B7FE0;
+  --color-primary-dark: #1A5DB5;
+  --color-primary-light:#5BA3F5;
+  --color-accent:       #FF7A2F;
+  --color-accent-dark:  #D95C0D;
+  --color-secondary:    #1BBFB0;
+  --color-bg:           #F0F6FF;
+  --color-bg-card:      #FFFFFF;
+  --color-bg-gray:      #E8EEF8;
+  --color-text:         #1A2744;
+  --color-text-muted:   #5A6A90;
+  --color-border:       #C8D8F0;
+  --color-success:      #22C55E;
+  --color-warning:      #F59E0B;
+  --color-danger:       #EF4444;
+  --color-gray-account: #94A3B8;
+}
+
+/* ── 2. חלל סגול (Purple Space) — Purple / Deep Blue / Pink ── */
+.theme-purple-space {
+  --color-primary:      #7C3AED;
+  --color-primary-dark: #5B21B6;
+  --color-primary-light:#A78BFA;
+  --color-accent:       #EC4899;
+  --color-accent-dark:  #BE185D;
+  --color-secondary:    #1E3A8A;
+  --color-bg:           #F5F0FF;
+  --color-bg-card:      #FFFFFF;
+  --color-bg-gray:      #EDE9FE;
+  --color-text:         #1E1B4B;
+  --color-text-muted:   #6D5FA8;
+  --color-border:       #DDD6FE;
+  --color-success:      #22C55E;
+  --color-warning:      #F59E0B;
+  --color-danger:       #EF4444;
+  --color-gray-account: #94A3B8;
+}
+
+/* ── 3. אש ושמש (Fire & Sun) — Red / Orange / Yellow ──────── */
+.theme-fire-sun {
+  --color-primary:      #DC2626;
+  --color-primary-dark: #991B1B;
+  --color-primary-light:#F87171;
+  --color-accent:       #F59E0B;
+  --color-accent-dark:  #B45309;
+  --color-secondary:    #EA580C;
+  --color-bg:           #FFF7ED;
+  --color-bg-card:      #FFFFFF;
+  --color-bg-gray:      #FEF3C7;
+  --color-text:         #431407;
+  --color-text-muted:   #92400E;
+  --color-border:       #FED7AA;
+  --color-success:      #22C55E;
+  --color-warning:      #F59E0B;
+  --color-danger:       #EF4444;
+  --color-gray-account: #94A3B8;
+}
+
+/* ── 4. יער ונענע (Forest & Mint) — Green / Yellow / Turquoise */
+.theme-forest-mint {
+  --color-primary:      #16A34A;
+  --color-primary-dark: #15803D;
+  --color-primary-light:#4ADE80;
+  --color-accent:       #FACC15;
+  --color-accent-dark:  #CA8A04;
+  --color-secondary:    #0D9488;
+  --color-bg:           #F0FDF4;
+  --color-bg-card:      #FFFFFF;
+  --color-bg-gray:      #DCFCE7;
+  --color-text:         #052E16;
+  --color-text-muted:   #166534;
+  --color-border:       #BBF7D0;
+  --color-success:      #22C55E;
+  --color-warning:      #F59E0B;
+  --color-danger:       #EF4444;
+  --color-gray-account: #94A3B8;
+}
+
+/* ── Theme palette key → CSS class map (used by auth.js) ───── */
+/* Key stored in Google Sheets → class applied to <body>
+   "ים וגיבור"   → theme-sea-hero
+   "חלל סגול"    → theme-purple-space
+   "אש ושמש"     → theme-fire-sun
+   "יער ונענע"   → theme-forest-mint
+*/
