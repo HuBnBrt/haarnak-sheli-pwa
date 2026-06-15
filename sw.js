@@ -8,7 +8,10 @@
 // Bump CACHE_NAME when deploying new shell versions.
 // ─────────────────────────────────────────────────────────────
 
-const CACHE_NAME = 'haarnak-sheli-v1';
+// Bump this string on every deployment that changes shell files.
+// A new name causes the browser to install a fresh SW, delete the
+// old cache, and serve updated files to all clients.
+const CACHE_NAME = 'haarnak-sheli-v2';
 
 const SHELL_FILES = [
   './',
@@ -23,6 +26,7 @@ const SHELL_FILES = [
   './js/auth.js',
   './js/views/setup.js',
   './js/views/child-dashboard.js',
+  './js/views/parent-controls.js',
   './js/views/parent-dashboard.js',
   './js/app.js',
   './icons/icon-192.png',
