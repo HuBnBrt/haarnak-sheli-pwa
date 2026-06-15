@@ -39,44 +39,51 @@ Views.ParentControls = {
     const childName = childIdentity ? childIdentity.displayName : '...';
 
     container.innerHTML = `
-      <div class="page" style="padding-top:0;">
+      <div class="page">
 
         <!-- ── Parent-mode banner ─────────────────────────── -->
+        <!--
+          Card-style: fits inside page padding, rounded corners,
+          amber tint — clearly "different mode" but not alarming.
+          parentId and parentName exist only in this closure.
+        -->
         <div style="
-          background: var(--color-warning);
-          color: #78350F;
-          padding: 14px 16px 12px;
-          margin: 0 -16px 20px;
+          background: #FFFBEB;
+          border: 1.5px solid #FCD34D;
+          border-radius: var(--radius-lg, 16px);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+          padding: 12px 14px;
+          margin-bottom: 20px;
           display: flex;
           align-items: center;
           justify-content: space-between;
           gap: 12px;
-          position: sticky;
-          top: 0;
-          z-index: 10;
         ">
-          <div>
-            <div style="font-weight: 700; font-size: 1rem; line-height: 1.2;">
+          <div style="min-width: 0;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: #92400E; line-height: 1.3;">
               🔑 בקרת הורים פעילה
             </div>
-            <div style="font-size: 0.8rem; opacity: 0.85; margin-top: 2px;">
-              מורשה: ${_pcEscHtml(parentName)} &nbsp;·&nbsp; ילד/ה: ${_pcEscHtml(childName)}
+            <div style="font-size: 0.78rem; color: #B45309; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+              ${_pcEscHtml(parentName)} &nbsp;·&nbsp; ${_pcEscHtml(childName)}
             </div>
           </div>
           <button
             id="exit-parent-controls-btn"
             style="
-              background: rgba(0,0,0,0.12);
-              border: none;
-              border-radius: var(--radius-md);
-              color: #78350F;
-              font-size: 0.85rem;
+              background: #FEF3C7;
+              border: 1px solid #FCD34D;
+              border-radius: var(--radius-md, 10px);
+              color: #92400E;
+              font-size: 0.82rem;
               font-weight: 600;
-              padding: 8px 14px;
+              padding: 7px 14px;
               cursor: pointer;
               white-space: nowrap;
               flex-shrink: 0;
+              transition: background 0.15s;
             "
+            onmouseover="this.style.background='#FDE68A'"
+            onmouseout="this.style.background='#FEF3C7'"
           >
             ✕ סיום
           </button>

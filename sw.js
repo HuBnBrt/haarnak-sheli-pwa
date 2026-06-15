@@ -11,7 +11,7 @@
 // Bump this string on every deployment that changes shell files.
 // A new name causes the browser to install a fresh SW, delete the
 // old cache, and serve updated files to all clients.
-const CACHE_NAME = 'haarnak-sheli-v2';
+const CACHE_NAME = 'haarnak-sheli-v3';
 
 const SHELL_FILES = [
   './',
