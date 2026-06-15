@@ -34,26 +34,49 @@ const App = (() => {
   function route() {
     const hash = window.location.hash.replace('#', '') || '';
 
-    // Explicit hash always honoured (allows direct navigation in dev)
-    if (VIEWS[hash]) {
-      VIEWS[hash]();
-      return;
-    }
-
     // Step 1: GAS URL must be configured before anything else
     if (!API.isConfigured()) {
       navigate('setup');
       return;
     }
 
-    // Step 2: Device identity
+    // Step 2: Device identity must be set
     const identity = Auth.getIdentity();
     if (!identity) {
       navigate('setup');
-    } else if (identity.userType === 'parent') {
-      navigate('parent');
+      return;
+    }
+
+    // Step 3: Route strictly by device identity type.
+    //
+    // A device is bound to exactly ONE user (child OR parent).
+    // Child devices must never reach #parent via the router —
+    // parent controls on a child device are handled inline by
+    // ParentControls.render() after PIN verification, with no
+    // hash change.
+    //
+    // The only way to change device identity is through setup
+    // (requires parent PIN → resetDeviceIdentity → re-bind).
+
+    if (identity.userType === 'parent') {
+      // Parent-bound device: always show parent dashboard.
+      // Allow explicit #parent hash (e.g., after navigating back).
+      if (hash !== 'parent') navigate('parent');
+      else VIEWS['parent']();
     } else {
-      navigate('child');
+      // Child-bound device: always show child dashboard.
+      // Block any attempt to reach #parent via the hash bar.
+      if (hash === 'parent') {
+        // Silently redirect — no error shown, no parent controls opened.
+        navigate('child');
+      } else if (hash === 'child' || hash === '') {
+        VIEWS['child']();
+      } else if (VIEWS[hash]) {
+        // #setup is always allowed (e.g., after identity reset)
+        VIEWS[hash]();
+      } else {
+        navigate('child');
+      }
     }
   }
 

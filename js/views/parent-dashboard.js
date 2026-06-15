@@ -1,7 +1,11 @@
 // ─────────────────────────────────────────────────────────────
-// views/parent-dashboard.js — Parent mode home screen
-// Phase 1: identity display, device reset, back to child.
-// Full parent management UI in Phase 8.
+// views/parent-dashboard.js — Parent device home screen
+//
+// This view is only reachable when the device is bound to a
+// parent user identity. Child devices never reach this view —
+// they use Views.ParentControls (inline, PIN-gated) instead.
+//
+// Full management UI in Phase 8.
 // ─────────────────────────────────────────────────────────────
 
 'use strict';
@@ -17,43 +21,53 @@ Views.ParentDashboard = {
     container.innerHTML = `
       <div class="page">
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-          <div>
-            <h2 style="margin:0 0 2px;">שלום, ${_pdEscHtml(name)}!</h2>
-            <p class="text-muted" style="margin:0; font-size:0.88rem;">מצב הורה</p>
-          </div>
-          <button class="btn btn-ghost" id="back-to-child-btn"
-            style="font-size:0.82rem; padding:8px 12px; min-height:auto;">
-            ← ילד
-          </button>
+        <!-- ── Header ──────────────────────────────────────── -->
+        <div style="margin-bottom: 24px;">
+          <h2 style="margin: 0 0 2px;">שלום, ${_pdEscHtml(name)}!</h2>
+          <p class="text-muted" style="margin: 0; font-size: 0.88rem;">
+            לוח הורה — ניהול הארנק המשפחתי
+          </p>
         </div>
 
-        <!-- Management sections (Phase 8 stubs) -->
-        <div class="card" style="margin-bottom:12px;">
+        <!-- ── Management sections (Phase stubs) ───────────── -->
+
+        <div class="card" style="margin-bottom: 12px;">
           <div class="section-title">ניהול ילדים</div>
-          <p class="text-muted" style="font-size:0.9rem;">
+          <p class="text-muted" style="font-size: 0.9rem;">
             <em>יתרות, אישור מטלות, העברות — Phase 3–7</em>
           </p>
         </div>
 
-        <div class="card" style="margin-bottom:12px;">
+        <div class="card" style="margin-bottom: 12px;">
           <div class="section-title">הגדרות</div>
-          <p class="text-muted" style="font-size:0.9rem;">
-            <em>דמי כיס, בונוס, מטבעות — Phase 8</em>
+          <p class="text-muted" style="font-size: 0.9rem;">
+            <em>דמי כיס, בונוס, הגדרות מטלות — Phase 8</em>
           </p>
         </div>
 
-        <div class="card" style="margin-bottom:24px;">
+        <div class="card" style="margin-bottom: 24px;">
           <div class="section-title">יומן פעולות</div>
-          <p class="text-muted" style="font-size:0.9rem;">
+          <p class="text-muted" style="font-size: 0.9rem;">
             <em>כל הפעולות מתועדות ב-Google Sheets — Phase 8</em>
           </p>
         </div>
 
-        <!-- Device reset -->
-        <div style="text-align:center; padding-top:8px; border-top:1px solid var(--color-border);">
-          <button class="btn btn-ghost" id="reset-device-btn"
-            style="font-size:0.82rem; color:var(--color-text-muted); padding:8px 16px; min-height:auto;">
+        <!-- ── Device reset ───────────────────────────────── -->
+        <!--
+          On a parent device, "reset device" unbinds the parent from
+          this device and returns to the user picker.
+          Requires parent PIN (same as any sensitive action).
+        -->
+        <div style="
+          text-align: center;
+          padding-top: 8px;
+          border-top: 1px solid var(--color-border);
+        ">
+          <button
+            class="btn btn-ghost"
+            id="pd-reset-device-btn"
+            style="font-size: 0.82rem; color: var(--color-text-muted); padding: 8px 16px; min-height: auto;"
+          >
             החלף משתמש / איפוס מכשיר
           </button>
         </div>
@@ -61,15 +75,10 @@ Views.ParentDashboard = {
       </div>
     `;
 
-    // ── Back to child view ───────────────────────────────────
-    document.getElementById('back-to-child-btn').addEventListener('click', () => {
-      App.navigate('child');
-    });
-
     // ── Device reset ─────────────────────────────────────────
-    document.getElementById('reset-device-btn').addEventListener('click', async () => {
+    document.getElementById('pd-reset-device-btn').addEventListener('click', async () => {
       try {
-        await Auth.resetDeviceIdentity();   // shows PIN modal, calls GAS, clears identity
+        await Auth.resetDeviceIdentity();
         App.navigate('setup');
       } catch (err) {
         if (err.message !== 'cancelled') {

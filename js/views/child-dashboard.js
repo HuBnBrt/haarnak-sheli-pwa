@@ -1,7 +1,19 @@
 // ─────────────────────────────────────────────────────────────
 // views/child-dashboard.js — Child mode home screen
-// Phase 1: identity display + device reset.
-// Real account data in Phase 3+.
+//
+// ── Authorization model ───────────────────────────────────────
+// This device is bound to ONE child. The default state is this
+// view, locked to that child.
+//
+// There is NO free parent/child toggle. The only path to parent
+// actions is through the "בקרת הורים" button, which requires a
+// fresh parent PIN every single time.
+//
+// After the parent exits, Views.ParentControls calls onExit()
+// which re-renders THIS view — parent auth is gone implicitly
+// because it only ever lived in the ParentControls closure.
+//
+// Phase 3+: real account balances will be rendered here.
 // ─────────────────────────────────────────────────────────────
 
 'use strict';
@@ -13,81 +25,123 @@ Views.ChildDashboard = {
   render(container) {
     const identity = Auth.getIdentity();
     const name     = identity ? identity.displayName : '...';
-    const gender   = identity ? identity.gender : 'm';
-    const greeting = gender === 'f' ? 'שלום' : 'שלום';  // same for MVP, room to expand
 
     container.innerHTML = `
       <div class="page">
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <!-- ── Header ──────────────────────────────────────── -->
+        <div style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+        ">
           <div>
-            <h2 style="margin:0 0 2px;">${greeting}, ${_cdEscHtml(name)}!</h2>
-            <p class="text-muted" style="margin:0; font-size:0.88rem;">הארנק שלי</p>
+            <h2 style="margin: 0 0 2px;">שלום, ${_cdEscHtml(name)}!</h2>
+            <p class="text-muted" style="margin: 0; font-size: 0.88rem;">הארנק שלי</p>
           </div>
-          <button class="btn btn-ghost" id="parent-mode-btn"
-            style="font-size:0.82rem; padding:8px 12px; min-height:auto;">
-            🔑 הורה
+
+          <!--
+            "בקרת הורים" — the ONLY entry point to parent actions.
+            Requires fresh PIN every time. No persistent parent session.
+          -->
+          <button
+            class="btn btn-ghost"
+            id="parent-controls-btn"
+            style="font-size: 0.82rem; padding: 8px 12px; min-height: auto;"
+            aria-label="כניסה לבקרת הורים — נדרש קוד"
+          >
+            🔑 בקרת הורים
           </button>
         </div>
 
-        <!-- Wallet -->
-        <div class="card card-accent" style="margin-bottom:12px;">
+        <!-- ── Accounts (stubs until Phase 2–6) ────────────── -->
+
+        <div class="card card-accent" style="margin-bottom: 12px;">
           <div class="section-title">${I18n.t('account.wallet')}</div>
-          <p class="text-muted" style="font-size:0.9rem;"><em>תוכן ארנק יוצג כאן (Phase 2)</em></p>
+          <p class="text-muted" style="font-size: 0.9rem;">
+            <em>תוכן ארנק יוצג כאן (Phase 2)</em>
+          </p>
         </div>
 
-        <!-- Savings -->
-        <div class="card card-accent" style="margin-bottom:12px;">
+        <div class="card card-accent" style="margin-bottom: 12px;">
           <div class="section-title">${I18n.t('account.savings')}</div>
-          <p class="text-muted" style="font-size:0.9rem;"><em>חיסכון ומטרות יוצגו כאן (Phase 3–4)</em></p>
+          <p class="text-muted" style="font-size: 0.9rem;">
+            <em>חיסכון ומטרות יוצגו כאן (Phase 3–4)</em>
+          </p>
         </div>
 
-        <!-- Giving -->
-        <div class="card card-accent" style="margin-bottom:12px;">
+        <div class="card card-accent" style="margin-bottom: 12px;">
           <div class="section-title">${I18n.t('account.giving')}</div>
-          <p class="text-muted" style="font-size:0.9rem;"><em>נתינה יוצג כאן (Phase 6)</em></p>
+          <p class="text-muted" style="font-size: 0.9rem;">
+            <em>נתינה יוצג כאן (Phase 6)</em>
+          </p>
         </div>
 
-        <!-- Gray accounts -->
-        <div class="card card-gray" style="margin-bottom:8px;">
+        <div class="card card-gray" style="margin-bottom: 8px;">
           <div class="section-title">${I18n.t('account.gifts')}</div>
-          <p class="text-muted" style="font-size:0.88rem;">${I18n.t('account.gifts.desc')}</p>
-        </div>
-        <div class="card card-gray" style="margin-bottom:24px;">
-          <div class="section-title">${I18n.t('account.chores')}</div>
-          <p class="text-muted" style="font-size:0.88rem;">${I18n.t('account.chores.desc')}</p>
+          <p class="text-muted" style="font-size: 0.88rem;">
+            ${I18n.t('account.gifts.desc')}
+          </p>
         </div>
 
-        <!-- Device reset -->
-        <div style="text-align:center; padding-top:8px; border-top:1px solid var(--color-border);">
-          <button class="btn btn-ghost" id="reset-device-btn"
-            style="font-size:0.82rem; color:var(--color-text-muted); padding:8px 16px; min-height:auto;">
-            החלף משתמש / איפוס מכשיר
-          </button>
+        <div class="card card-gray" style="margin-bottom: 24px;">
+          <div class="section-title">${I18n.t('account.chores')}</div>
+          <p class="text-muted" style="font-size: 0.88rem;">
+            ${I18n.t('account.chores.desc')}
+          </p>
         </div>
 
       </div>
     `;
 
-    // ── Parent mode button ───────────────────────────────────
-    document.getElementById('parent-mode-btn').addEventListener('click', () => {
-      App.navigate('parent');
-    });
+    // ── "בקרת הורים" button ───────────────────────────────────
+    //
+    // Each tap starts a completely fresh authorization cycle.
+    // requireParentPin() calls GAS verifyParentPin — no cached result.
+    // parentId/parentName live only inside the ParentControls closure.
+    // When the parent taps "סיום", onExit() re-renders this view and
+    // any trace of parent auth disappears with the replaced DOM.
 
-    // ── Device reset ─────────────────────────────────────────
-    document.getElementById('reset-device-btn').addEventListener('click', async () => {
+    document.getElementById('parent-controls-btn').addEventListener('click', async () => {
       try {
-        await Auth.resetDeviceIdentity();   // shows PIN modal, calls GAS, clears identity
-        App.navigate('setup');
+        const { parentId, displayName: parentName } = await Auth.requireParentPin(
+          'הורה, הזן קוד לגישה לבקרת הורים'
+        );
+
+        // PIN correct — render parent controls inline.
+        // No route change. No hash update. No localStorage write.
+        Views.ParentControls.render(container, {
+          parentId,
+          parentName,
+          childIdentity: identity,
+          onExit: () => Views.ChildDashboard.render(container),
+        });
+
       } catch (err) {
+        // 'cancelled' = parent dismissed the modal; no action needed.
+        // Any other error is surfaced briefly.
         if (err.message !== 'cancelled') {
-          alert('שגיאה באיפוס: ' + err.message);
+          _cdShowError(container, err.message);
         }
       }
     });
   },
 
 };
+
+// ── Helpers ───────────────────────────────────────────────────
+
+function _cdShowError(container, message) {
+  const existing = container.querySelector('.cd-error-banner');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.className = 'error-banner cd-error-banner';
+  banner.style.cssText = 'margin: 0 0 12px;';
+  banner.textContent = message;
+  const page = container.querySelector('.page');
+  if (page) page.insertBefore(banner, page.firstChild);
+}
 
 function _cdEscHtml(str) {
   return String(str)
