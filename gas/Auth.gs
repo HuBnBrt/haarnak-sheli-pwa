@@ -71,3 +71,48 @@ function requirePin(payload) {
   if (!result.valid) throw new Error('קוד הורה שגוי או חסר.');
   return result;
 }
+
+/**
+ * Set a parent's PIN for the first time (bootstrap only).
+ *
+ * Rules:
+ *   - Target user must be a parent role.
+ *   - Only allowed when the user currently has NO pin_hash.
+ *   - PIN must be 4–8 digits.
+ *   - No existing PIN required (this IS the first-time setup gate).
+ *
+ * @param {{ userId: string, newPin: string }} payload
+ * @returns {{ ok: true }}
+ */
+function setInitialParentPin(payload) {
+  const { userId, newPin } = payload;
+
+  if (!userId || !newPin) throw new Error('userId ו-newPin הם שדות חובה.');
+
+  const pinStr = String(newPin).trim();
+  if (!/^\d{4,8}$/.test(pinStr)) throw new Error('קוד חייב להכיל 4–8 ספרות בלבד.');
+
+  const users = readTab('users');
+  const user  = users.find(u => u['user_id'] === userId);
+  if (!user)                          throw new Error('משתמש לא נמצא.');
+  if (user['user_type'] !== 'parent') throw new Error('ניתן להגדיר קוד רק להורים.');
+  if (user['pin_hash'])               throw new Error('קוד הורה כבר הוגדר. לשינוי השתמש בלוח ההורה.');
+
+  const newHash = hashPin(pinStr);
+
+  // Update the pin_hash cell directly (no appendRow — we're updating an existing row)
+  const sheet      = getSheet('users');
+  const headers    = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const pinHashCol = headers.indexOf('pin_hash') + 1;
+  const userIdCol  = headers.indexOf('user_id')  + 1;
+  if (pinHashCol === 0) throw new Error('עמודת pin_hash לא נמצאה בגיליון users.');
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][userIdCol - 1] === userId) {
+      sheet.getRange(i + 1, pinHashCol).setValue(newHash);
+      return { ok: true };
+    }
+  }
+  throw new Error('שורת משתמש לא נמצאה בגיליון.');
+}

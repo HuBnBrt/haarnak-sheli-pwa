@@ -53,10 +53,11 @@ function doPost(e) {
         break;
 
       // ── Identity (Phase 1) ────────────────────────────────
-      case 'getInitialUsers':       result = getInitialUsers(payload);      break;
-      case 'bindDeviceIdentity':    result = bindDeviceIdentity(payload);   break;
-      case 'resetDeviceIdentity':   result = resetDeviceIdentity(payload);  break;
-      case 'verifyParentPin':       result = verifyParentPin(payload);      break;
+      case 'getInitialUsers':       result = getInitialUsers(payload);        break;
+      case 'bindDeviceIdentity':    result = bindDeviceIdentity(payload);     break;
+      case 'resetDeviceIdentity':   result = resetDeviceIdentity(payload);    break;
+      case 'verifyParentPin':       result = verifyParentPin(payload);        break;
+      case 'setInitialParentPin':   result = setInitialParentPin(payload);    break;
 
       // ── Dashboard (Phase 3) ───────────────────────────────
       case 'getChildDashboard':     result = getChildDashboard(payload);    break;
