@@ -386,7 +386,9 @@ function getPurchasableGoals(payload) {
   var goals             = getGoals({ userId: userId });
 
   var purchasableGoals = goals.filter(function(g) {
-    return g.targetAgorot > 0 && savingsAgorot >= g.targetAgorot;
+    // Purchasable = physical wallet has enough cash right now.
+    // Savings balance is irrelevant here; the child pays from the wallet.
+    return g.targetAgorot > 0 && walletTotalAgorot >= g.targetAgorot;
   });
 
   return {

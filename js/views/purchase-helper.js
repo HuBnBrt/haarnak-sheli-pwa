@@ -63,7 +63,7 @@ async function _phStep0(el, userId, gender, onExit) {
 }
 
 function _phStep0Render(el, userId, gender, onExit, phData) {
-  const { savingsAgorot, purchasableGoals, goals } = phData;
+  const { savingsAgorot, walletTotalAgorot, purchasableGoals, goals } = phData;
 
   // Cart state: goalId → price (agorot) — starts at each goal's targetAgorot
   const cart = {};
@@ -85,7 +85,7 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
         border-radius:12px;margin-bottom:12px;line-height:1.5;
       ">
         🏆 יש לך ${goals.length === 1 ? 'מטרה' : `${goals.length} מטרות`} —
-        אבל עדיין אין מספיק חיסכון לקנות אף אחת מהן.
+        אבל אין מספיק כסף בארנק כדי לקנות אף אחת מהן עכשיו.
       </div>`;
   }
 
@@ -106,13 +106,13 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
         <span style="${_phHeaderTitleStyle()}">🛒 מה קונים עכשיו?</span>
       </div>
 
-      <!-- Savings balance pill (reference) -->
+      <!-- Wallet balance pill -->
       <div style="
         display:inline-flex;align-items:center;gap:6px;
-        background:#ECFDF5;border:1.5px solid #34D399;
+        background:#EFF6FF;border:1.5px solid #93C5FD;
         border-radius:20px;padding:4px 12px;margin-bottom:14px;
-        font-size:0.82rem;font-weight:700;color:#065F46;
-      ">💰 חיסכון: ${Currency.formatILS(savingsAgorot)}</div>
+        font-size:0.82rem;font-weight:700;color:#1E40AF;
+      ">💳 ארנק: ${Currency.formatILS(walletTotalAgorot)}</div>
 
       ${goalSectionHTML}
 
@@ -204,11 +204,11 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
         delete cart[goalId];
       } else {
         const currentTotal = Object.values(cart).reduce((s, p) => s + p, 0);
-        if (currentTotal + goal.targetAgorot > savingsAgorot) return;
+        if (currentTotal + goal.targetAgorot > walletTotalAgorot) return;
         cart[goalId] = goal.targetAgorot;
       }
 
-      _phStep0UpdateSelection(el, cart, purchasableGoals, savingsAgorot);
+      _phStep0UpdateSelection(el, cart, purchasableGoals, walletTotalAgorot);
     });
   });
 
@@ -220,7 +220,7 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
       const cartArr = purchasableGoals
         .filter(g => g.goalId in cart)
         .map(g => ({ goal: g, actualPrice: cart[g.goalId] }));
-      _phGoalPriceReview(el, userId, gender, onExit, cartArr, savingsAgorot);
+      _phGoalPriceReview(el, userId, gender, onExit, cartArr, walletTotalAgorot);
     });
   }
 
@@ -277,10 +277,10 @@ function _phGoalCardHTML(goal) {
 }
 
 /** Surgical DOM update after each goal card tap. */
-function _phStep0UpdateSelection(el, cart, purchasableGoals, savingsAgorot) {
+function _phStep0UpdateSelection(el, cart, purchasableGoals, walletTotalAgorot) {
   const cartCount = Object.keys(cart).length;
   const cartTotal = Object.values(cart).reduce((s, p) => s + p, 0);
-  const remaining = savingsAgorot - cartTotal;
+  const remaining = walletTotalAgorot - cartTotal;
 
   purchasableGoals.forEach(g => {
     const card = el.querySelector(`.gp-goal-card[data-goal-id="${g.goalId}"]`);
@@ -325,7 +325,7 @@ function _phStep0UpdateSelection(el, cart, purchasableGoals, savingsAgorot) {
 // No API calls here. Passes goalContext into Step 2.
 // ══════════════════════════════════════════════════════════════
 
-function _phGoalPriceReview(el, userId, gender, onExit, cartArr, savingsAgorot) {
+function _phGoalPriceReview(el, userId, gender, onExit, cartArr, walletTotalAgorot) {
   // prices: goalId → actual price agorot (editable; starts at targetAgorot)
   const prices = {};
   cartArr.forEach(({ goal }) => { prices[goal.goalId] = goal.targetAgorot; });
@@ -393,17 +393,17 @@ function _phGoalPriceReview(el, userId, gender, onExit, cartArr, savingsAgorot) 
         <span style="${_phHeaderTitleStyle()}">🏆 מחיר לקנייה</span>
       </div>
 
-      <!-- Savings reference -->
+      <!-- Wallet balance reference -->
       <div style="
         display:flex;justify-content:space-between;align-items:center;
-        padding:10px 14px;background:var(--color-bg-subtle,#F8FAFC);
+        padding:10px 14px;background:#EFF6FF;border:1.5px solid #93C5FD;
         border-radius:12px;margin-bottom:14px;
       ">
-        <span style="font-size:0.82rem;color:var(--color-text-muted);font-weight:600;">
-          חיסכון זמין
+        <span style="font-size:0.82rem;color:#1E40AF;font-weight:600;">
+          💳 ארנק פיזי
         </span>
-        <span style="font-weight:900;font-size:1.05rem;color:#16A34A;">
-          ${Currency.formatILS(savingsAgorot)}
+        <span style="font-weight:900;font-size:1.05rem;color:#1E40AF;">
+          ${Currency.formatILS(walletTotalAgorot)}
         </span>
       </div>
 
