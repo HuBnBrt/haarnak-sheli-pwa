@@ -240,7 +240,7 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
     _phStep2(el, userId, gender, onExit, agorot, desc, onBack, null);
   });
 
-  _phStep0UpdateSelection(el, cart, purchasableGoals, savingsAgorot);
+  _phStep0UpdateSelection(el, cart, purchasableGoals, walletTotalAgorot);
 }
 
 /** HTML for one purchasable goal card. */
