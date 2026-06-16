@@ -167,11 +167,17 @@ async function _cdLoadAccountBalances(userId, gender) {
   try {
     const { data } = await API.callGASWithFallback('getChildDashboard', { userId });
 
+    // walletTotalAgorot is included in getChildDashboard so goal cards can
+    // compute purchase readiness (spec §9b) without a second API round-trip.
+    const walletTotal = typeof data.walletTotalAgorot === 'number'
+      ? data.walletTotalAgorot : 0;
+
     _cdRenderSavings(
       document.getElementById('savings-content'),
       data.savings.balanceAgorot,
       gender,
-      userId
+      userId,
+      walletTotal
     );
     _cdRenderGiving(
       document.getElementById('giving-content'),
@@ -202,13 +208,23 @@ async function _cdLoadAccountBalances(userId, gender) {
 
 // ── Section renderers ─────────────────────────────────────────
 
-function _cdRenderSavings(el, balanceAgorot, gender, userId) {
+/**
+ * Render the savings card body.
+ *
+ * @param {HTMLElement} el
+ * @param {number}      balanceAgorot  — virtual savings account total
+ * @param {string}      gender         — 'm' | 'f'
+ * @param {string}      userId
+ * @param {number}      walletAgorot   — physical wallet total (for goal purchase readiness)
+ */
+function _cdRenderSavings(el, balanceAgorot, gender, userId, walletAgorot) {
   if (!el) return;
 
   const isSavingsFemale = gender === 'f';
+  const wAgorot = typeof walletAgorot === 'number' ? walletAgorot : 0;
 
   el.innerHTML = `
-    <!-- Balance -->
+    <!-- Savings balance -->
     <div style="
       font-size: 2rem;
       font-weight: 900;
@@ -232,10 +248,11 @@ function _cdRenderSavings(el, balanceAgorot, gender, userId) {
     <div id="goals-content"></div>
   `;
 
-  // Kick off goals fetch once the savings shell is in the DOM
+  // Kick off goals fetch once the savings shell is in the DOM.
+  // Pass walletAgorot so goal cards can compute purchase readiness (spec §9b).
   const goalsEl = document.getElementById('goals-content');
   if (goalsEl && userId) {
-    GoalsDisplay.render(goalsEl, userId, balanceAgorot);
+    GoalsDisplay.render(goalsEl, userId, balanceAgorot, wAgorot);
   }
 }
 

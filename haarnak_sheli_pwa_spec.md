@@ -343,20 +343,103 @@ Suggested archive label:
 
 ### Goal card progress display
 
-Each goal card must cap the displayed saved amount at the goal target.
+Goal cards show two **separate and distinct** concepts: savings progress and purchase readiness.
+These must never be merged or confused in the UI or in future development.
 
-If savings balance is 40 ₪ and goal target is 25 ₪, display:
+#### 9a. Savings progress
 
-> ״25 מתוך 25 ₪״
+This is purely about the virtual savings account.
+It answers: "How much of your savings is going toward this goal?"
 
-Do not display:
+The savings balance is a single shared pool across all goals.
+Each goal card shows the full savings balance vs. that goal's target.
 
-> ״40 מתוך 25 ₪״
+The displayed saved amount must be capped at the goal target — never show more than the target.
 
-If savings balance is 15 ₪ and goal target is 25 ₪, display:
+Examples:
+
+| Savings | Target | Displayed |
+|---------|--------|-----------|
+| 40 ₪    | 25 ₪   | 25 מתוך 25 ₪ (capped) |
+| 15 ₪    | 25 ₪   | 15 מתוך 25 ₪ |
+| 0 ₪     | 25 ₪   | 0 מתוך 25 ₪ |
+
+If savings balance is 15 ₪ and goal target is 25 ₪, the savings progress line reads:
 
 > ״15 מתוך 25 ₪״  
-> ״חסרים לך עוד 10 ₪״
+> ״חסרים לך עוד 10 ₪ בחיסכון״
+
+The progress bar is based on savings only and capped at 100%.
+
+#### 9b. Purchase readiness
+
+This is about whether the child can actually buy the item **right now**.
+It considers the physical wallet first, because the physical wallet is real cash the child already has.
+
+Purchase readiness uses this decision tree:
+
+**Case A — Wallet alone is enough:**
+
+```
+walletAgorot >= targetAgorot
+```
+
+Display: ״יש מספיק בארנק. אפשר לקנות!״
+
+**Case B — Wallet is not enough, but savings can cover the rounded-up redemption increment:**
+
+Redemptions from savings to wallet are done in 10 ₪ increments (per section 10).
+The suggested amount must always be a multiple of 10 ₪ — never a fractional shekel amount.
+
+```
+walletShortfall         = targetAgorot - walletAgorot
+recommendedRedeemAgorot = Math.ceil(walletShortfall / 1000) * 1000   // round UP to nearest 10 ₪
+
+walletAgorot < targetAgorot
+AND savingsAgorot >= recommendedRedeemAgorot
+```
+
+Display:
+
+> ״בארנק עוד חסר קצת. אבל יש לך מספיק בחיסכון!  
+> אפשר לבקש מאבאמא להעביר X ₪ מהחיסכון לארנק.״
+
+Where X = `recommendedRedeemAgorot` (the wallet shortfall rounded up to the next 10 ₪).
+
+Examples:
+
+| Target | Wallet | Shortfall | Rounded to 10 ₪ | Savings needed for Case B |
+|--------|--------|-----------|-----------------|--------------------------|
+| 24.90 ₪ | 20 ₪  | 4.90 ₪    | 10 ₪            | savings ≥ 10 ₪ |
+| 35 ₪    | 23 ₪  | 12 ₪      | 20 ₪            | savings ≥ 20 ₪ |
+| 51 ₪    | 30 ₪  | 21 ₪      | 30 ₪            | savings ≥ 30 ₪ |
+
+**Edge case:** If `walletAgorot + savingsAgorot >= targetAgorot` but `savingsAgorot < recommendedRedeemAgorot`,
+do NOT show Case B. The savings account cannot cover the minimum 10 ₪ increment needed,
+so the child cannot yet request a transfer. Fall through to Case C.
+
+Example: target 24.90 ₪, wallet 20 ₪, savings 5 ₪ → shortfall 4.90 ₪ → needs 10 ₪ → savings only 5 ₪ → **Case C**, not B.
+
+**Case C — Not enough even combined, or savings too small for the 10 ₪ increment:**
+
+```
+walletAgorot < targetAgorot
+AND savingsAgorot < recommendedRedeemAgorot
+```
+
+Display: ״חסרים עוד X ₪ כדי להגיע למטרה.״
+
+Where X = `targetAgorot - walletAgorot - savingsAgorot` (total combined shortfall).
+
+#### Important constraints for purchase readiness
+
+- **Do not move money automatically.** Readiness is display-only.
+- **Do not deduct from savings.** No automatic redemption.
+- **Actual transfer from savings to wallet requires parent approval and PIN.**
+  This belongs to the `redeemSavingsToWallet` action (Phase 5).
+- The child-facing message in Case B is an invitation to ask parents, not a button.
+- X in Case B is always a multiple of 10 ₪ (the rounded-up redemption increment).
+- X in Case C is the exact combined shortfall from wallet + savings.
 
 ### Savings card summary
 

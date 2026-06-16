@@ -10,27 +10,36 @@
 // All monetary values are integer agorot. Balances ≥ 0.
 //
 // Public entry points:
-//   getChildDashboard({ userId }) — returns all four balances in one call
+//   getChildDashboard({ userId }) — returns all four virtual account balances
+//                                   PLUS the physical wallet total in one call.
+//                                   The wallet total is needed so the frontend
+//                                   can compute purchase readiness per goal card
+//                                   (spec section 9b) without a second round-trip.
 //
 // Internal helpers used by Allowance.gs and future action files:
 //   _getAccountBalances(userId) → { savings, giving, gifts, chores }
 //   _getAccountBalance(userId, accountType) → agorot (integer)
 //   _addToAccountBalance(userId, accountType, deltaAgorot) → { before, after }
 //   _setAccountBalance(userId, accountType, newBalanceAgorot) → { before, after }
+//   _getWalletTotal(userId) → total agorot in physical wallet denominations
 // ─────────────────────────────────────────────────────────────
 
 const ACCOUNT_TYPES = ['savings', 'giving', 'gifts', 'chores'];
 
 /**
- * Return all virtual account balances for a child in a single call.
- * This is the primary fetch for the child dashboard.
+ * Return all virtual account balances for a child PLUS physical wallet total.
+ * This is the single primary fetch for the child dashboard (one round-trip).
+ *
+ * walletTotalAgorot is included here so the frontend can compute purchase
+ * readiness per goal card (spec §9b) without a separate API call.
  *
  * @param {{ userId: string }} payload
  * @returns {{
- *   savings: { balanceAgorot: number },
- *   giving:  { balanceAgorot: number },
- *   gifts:   { balanceAgorot: number },
- *   chores:  { balanceAgorot: number },
+ *   savings:          { balanceAgorot: number },
+ *   giving:           { balanceAgorot: number },
+ *   gifts:            { balanceAgorot: number },
+ *   chores:           { balanceAgorot: number },
+ *   walletTotalAgorot: number,   — sum of all physical wallet denominations
  * }}
  */
 function getChildDashboard(payload) {
@@ -42,13 +51,15 @@ function getChildDashboard(payload) {
   const user  = users.find(u => u['user_id'] === userId && u['active'] === true);
   if (!user) throw new Error('משתמש לא נמצא או אינו פעיל.');
 
-  const balances = _getAccountBalances(userId);
+  const balances     = _getAccountBalances(userId);
+  const walletTotal  = _getWalletTotal(userId);
 
   return {
-    savings: { balanceAgorot: balances.savings },
-    giving:  { balanceAgorot: balances.giving  },
-    gifts:   { balanceAgorot: balances.gifts   },
-    chores:  { balanceAgorot: balances.chores  },
+    savings:           { balanceAgorot: balances.savings },
+    giving:            { balanceAgorot: balances.giving  },
+    gifts:             { balanceAgorot: balances.gifts   },
+    chores:            { balanceAgorot: balances.chores  },
+    walletTotalAgorot: walletTotal,
   };
 }
 
@@ -177,6 +188,37 @@ function _writeAccountBalance(userId, accountType, newBalance) {
     newRow[iBalance] = newBalance;
     newRow[iUpdated] = now;
     sheet.appendRow(newRow);
+  }
+}
+
+/**
+ * Compute the total agorot in a child's physical wallet by summing
+ * all denomination rows from wallet_denominations.
+ *
+ * This is a read-only helper — it does NOT call getWalletDenominations()
+ * to avoid coupling Accounts.gs to Wallet.gs function signatures.
+ * It reads the sheet directly with the same logic Wallet.gs uses.
+ *
+ * Returns 0 if the child has no wallet rows (new setup, before first count).
+ *
+ * @param {string} userId
+ * @returns {number} total agorot (≥ 0)
+ */
+function _getWalletTotal(userId) {
+  try {
+    const rows = readTab('wallet_denominations');
+    let total  = 0;
+    rows
+      .filter(r => r['user_id'] === userId)
+      .forEach(r => {
+        const denom = Math.max(0, parseInt(r['denomination_agorot'], 10) || 0);
+        const count = Math.max(0, parseInt(r['count'],               10) || 0);
+        total += denom * count;
+      });
+    return total;
+  } catch (_) {
+    // If the tab doesn't exist yet (new setup), return 0 gracefully.
+    return 0;
   }
 }
 
