@@ -11,7 +11,7 @@
 // Bump this string on every deployment that changes shell files.
 // A new name causes the browser to install a fresh SW, delete the
 // old cache, and serve updated files to all clients.
-const CACHE_NAME = 'haarnak-sheli-v14';
+const CACHE_NAME = 'haarnak-sheli-v15';
 
 const SHELL_FILES = [
   './',
@@ -34,6 +34,17 @@ const SHELL_FILES = [
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  // Denomination images (used by purchase-helper, wallet-display, parent-controls)
+  './gfx/Agorot-10.png',
+  './gfx/Agorot-50.png',
+  './gfx/Sheqel-001.png',
+  './gfx/Sheqel-002.png',
+  './gfx/Sheqel-005.png',
+  './gfx/Sheqel-010.png',
+  './gfx/Sheqel-020.png',
+  './gfx/Sheqel-050.png',
+  './gfx/Sheqel-100.png',
+  './gfx/Sheqel-200.png',
 ];
 
 // Install: pre-cache the shell

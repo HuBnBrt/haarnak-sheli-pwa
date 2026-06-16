@@ -494,7 +494,7 @@ function _phGoalPriceReview(el, userId, gender, onExit, cartArr, walletTotalAgor
       goalTitles: cartArr.map(c => `${c.goal.emoji} ${c.goal.title}`),
       prices:     Object.assign({}, prices), // snapshot
     };
-    const onBack = () => _phGoalPriceReview(el, userId, gender, onExit, cartArr, savingsAgorot);
+    const onBack = () => _phGoalPriceReview(el, userId, gender, onExit, cartArr, walletTotalAgorot);
     _phStep2(el, userId, gender, onExit, totalAgorot, description, onBack, goalContext);
   });
 }
@@ -556,10 +556,7 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
     </div>` : '';
 
   const sugsHTML = suggestions.map((s, i) => {
-    const denomDesc = Currency.DENOMINATIONS
-      .filter(d => _phResolveDenomCount(s.denomCounts, d.agorot) > 0)
-      .map(d => `${_phResolveDenomCount(s.denomCounts, d.agorot)}×${d.labelHe}`)
-      .join(' + ');
+    const chipsHTML  = _phDenomChipsRowHTML(s.denomCounts);
     const changeText = s.changeAgorot > 0
       ? ` · עודף: ${Currency.formatILS(s.changeAgorot)}` : '';
     return `
@@ -568,13 +565,11 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
         padding:11px 14px;margin-bottom:9px;cursor:pointer;
         background:var(--color-bg);
       ">
-        <div style="font-size:0.78rem;color:var(--color-text-muted);margin-bottom:3px;font-weight:600;">
+        <div style="font-size:0.78rem;color:var(--color-text-muted);margin-bottom:4px;font-weight:600;">
           💡 ${_phEsc(s.label)}
         </div>
-        <div style="font-weight:800;font-size:0.98rem;color:var(--color-text);direction:ltr;text-align:left;">
-          ${_phEsc(denomDesc)}
-        </div>
-        <div style="font-size:0.82rem;margin-top:3px;font-weight:600;
+        ${chipsHTML}
+        <div style="font-size:0.8rem;margin-top:6px;font-weight:700;
           color:${s.exact ? '#16A34A' : '#2563EB'};">
           ${s.exact ? '✓ תשלום מדויק' : 'עם עודף'}${_phEsc(changeText)}
         </div>
@@ -587,13 +582,14 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
     return `
       <div style="
         display:flex;align-items:center;gap:8px;
-        padding:9px 0;border-bottom:1px solid var(--color-border);
+        padding:8px 0;border-bottom:1px solid var(--color-border);
       ">
-        <div style="flex:1;font-weight:700;font-size:0.95rem;
-          color:${isCoin ? '#92400E' : '#065F46'};">
-          ${_phEsc(d.labelHe)}
+        ${_phDenomRowImgHTML(d.agorot, isCoin)}
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:0.9rem;
+            color:${isCoin ? '#92400E' : '#065F46'};">${_phEsc(d.labelHe)}</div>
+          <div style="font-size:0.68rem;color:var(--color-text-muted);">יש: ${max}</div>
         </div>
-        <div style="font-size:0.72rem;color:var(--color-text-muted);">יש: ${max}</div>
         <div style="display:flex;align-items:center;gap:5px;">
           <button class="ph-minus" data-denom="${d.agorot}" type="button"
             style="${_phStepperBtnStyle(false)}" aria-label="פחות">−</button>
@@ -603,7 +599,7 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
         </div>
         <div id="ph-sub-${d.agorot}" style="
           font-size:0.72rem;color:var(--color-text-muted);
-          min-width:52px;text-align:left;direction:ltr;
+          min-width:48px;text-align:left;direction:ltr;
         "></div>
       </div>`;
   }).join('');
@@ -766,11 +762,12 @@ function _phStep3(el, userId, gender, onExit, priceAgorot, description,
     return `
       <div style="
         display:flex;align-items:center;gap:8px;
-        padding:9px 0;border-bottom:1px solid var(--color-border);
+        padding:8px 0;border-bottom:1px solid var(--color-border);
       ">
-        <div style="flex:1;font-weight:700;font-size:0.95rem;
-          color:${isCoin ? '#92400E' : '#065F46'};">
-          ${_phEsc(d.labelHe)}
+        ${_phDenomRowImgHTML(d.agorot, isCoin)}
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:0.9rem;
+            color:${isCoin ? '#92400E' : '#065F46'};">${_phEsc(d.labelHe)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:5px;">
           <button class="phc-minus" data-denom="${d.agorot}" type="button"
@@ -781,7 +778,7 @@ function _phStep3(el, userId, gender, onExit, priceAgorot, description,
         </div>
         <div id="phc-sub-${d.agorot}" style="
           font-size:0.72rem;color:var(--color-text-muted);
-          min-width:52px;text-align:left;direction:ltr;
+          min-width:48px;text-align:left;direction:ltr;
         "></div>
       </div>`;
   }).join('');
@@ -1216,6 +1213,140 @@ function _phEsc(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 }
+
+// ══════════════════════════════════════════════════════════════
+// DENOMINATION VISUAL HELPERS
+//
+// Public surface exposed as window.DenomVisual so wallet-display.js
+// and parent-controls.js can reuse these without duplicating code.
+// ══════════════════════════════════════════════════════════════
+
+/** Maps a denomination's agorot value to its image path. Returns null if no image. */
+function _phDenomImgSrc(agorot) {
+  const MAP = {
+    10:    '/gfx/Agorot-10.png',
+    50:    '/gfx/Agorot-50.png',
+    100:   '/gfx/Sheqel-001.png',
+    200:   '/gfx/Sheqel-002.png',
+    500:   '/gfx/Sheqel-005.png',
+    1000:  '/gfx/Sheqel-010.png',
+    2000:  '/gfx/Sheqel-020.png',
+    5000:  '/gfx/Sheqel-050.png',
+    10000: '/gfx/Sheqel-100.png',
+    20000: '/gfx/Sheqel-200.png',
+  };
+  return MAP[agorot] || null;
+}
+
+/**
+ * Renders a horizontal row of denomination chips from a counts map.
+ *
+ * For each denomination with count > 0:
+ *   - count === 1            : image only (no badge)
+ *   - count === 2 AND coin   : two coin images side-by-side ("I see 2 real coins")
+ *   - count >= 2 (bill)      : image + ×N badge (bills are wide; two side-by-side is noisy)
+ *   - count >= 3             : image + ×N badge
+ *
+ * Denomination label appears below each chip in muted small text.
+ *
+ * @param {{ [agorot]: number }} denomCounts
+ * @returns {string} HTML
+ */
+function _phDenomChipsRowHTML(denomCounts) {
+  const chips = [];
+
+  Currency.DENOMINATIONS.forEach(d => {
+    const count = _phResolveDenomCount(denomCounts, d.agorot);
+    if (count <= 0) return;
+    const src    = _phDenomImgSrc(d.agorot);
+    if (!src) return;
+    const isCoin = d.type === 'coin';
+    // Coins are circular — display taller; bills are landscape — display shorter but wider.
+    const h = isCoin ? 34 : 24;
+
+    let imgBlock;
+    if (count === 1) {
+      imgBlock = `<img src="${src}"
+        style="height:${h}px;width:auto;display:block;object-fit:contain;"
+        alt="" draggable="false" loading="lazy">`;
+    } else if (count === 2 && isCoin) {
+      const img = `<img src="${src}"
+        style="height:${h}px;width:auto;display:block;object-fit:contain;"
+        alt="" draggable="false" loading="lazy">`;
+      imgBlock = `<div style="display:flex;gap:2px;">${img}${img}</div>`;
+    } else {
+      imgBlock = `
+        <div style="position:relative;display:inline-block;">
+          <img src="${src}"
+            style="height:${h}px;width:auto;display:block;object-fit:contain;"
+            alt="" draggable="false" loading="lazy">
+          <span style="
+            position:absolute;bottom:-5px;left:-5px;
+            min-width:18px;height:18px;
+            background:#1D4ED8;color:#fff;
+            font-size:0.58rem;font-weight:900;
+            border-radius:9px;padding:0 3px;
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 1px 3px rgba(0,0,0,0.22);
+            font-family:inherit;line-height:1;
+          ">×${count}</span>
+        </div>`;
+    }
+
+    chips.push(`
+      <div style="
+        display:inline-flex;flex-direction:column;align-items:center;gap:3px;
+        padding-bottom:4px;
+      ">
+        ${imgBlock}
+        <span style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);
+          white-space:nowrap;">${_phEsc(d.labelHe)}</span>
+      </div>`);
+  });
+
+  if (!chips.length) return '';
+
+  const sep = `<span style="
+    font-size:1rem;font-weight:300;color:var(--color-border);
+    align-self:center;margin-bottom:16px;
+  ">+</span>`;
+
+  return `<div style="
+    display:flex;flex-wrap:wrap;gap:6px 8px;align-items:flex-end;padding:4px 0 0;
+  ">${chips.join(sep)}</div>`;
+}
+
+/**
+ * Renders the image cell for a denomination row in the manual chooser (Step 2 / Step 3).
+ * Fixed 52×48 px container; image scales to fit naturally.
+ *
+ * @param {number}  agorot
+ * @param {boolean} isCoin
+ * @returns {string} HTML
+ */
+function _phDenomRowImgHTML(agorot, isCoin) {
+  const src = _phDenomImgSrc(agorot);
+  const h   = isCoin ? 40 : 28; // coins taller; bills shorter but wider
+  return `<div style="
+    width:52px;height:48px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+  ">
+    ${src
+      ? `<img src="${src}"
+          style="height:${h}px;width:auto;max-width:50px;display:block;object-fit:contain;"
+          alt="" draggable="false" loading="lazy">`
+      : `<span style="font-size:0.65rem;font-weight:700;
+          color:var(--color-text-muted);">${agorot >= 100 ? (agorot / 100) + '₪' : agorot + 'א'}</span>`
+    }
+  </div>`;
+}
+
+// Expose for reuse in wallet-display.js and parent-controls.js
+window.DenomVisual = {
+  imgSrc:   _phDenomImgSrc,
+  chipsRow: _phDenomChipsRowHTML,
+  rowImg:   _phDenomRowImgHTML,
+};
 
 // ══════════════════════════════════════════════════════════════
 // INLINE STYLE HELPERS
