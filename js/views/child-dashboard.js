@@ -17,6 +17,7 @@
 // Phase 2: wallet  → WalletDisplay.renderReadOnly() (#wallet-content)
 // Phase 3: accounts → getChildDashboard() → four account cards
 //   #savings-content, #giving-content, #gifts-content, #chores-content
+// Phase 4: goals → GoalsDisplay.render() → #goals-content (inside savings card)
 //
 // Both fetches run in parallel after the page shell is rendered.
 // ─────────────────────────────────────────────────────────────
@@ -128,7 +129,7 @@ Views.ChildDashboard = {
       const walletEl = document.getElementById('wallet-content');
       if (walletEl) WalletDisplay.renderReadOnly(walletEl, identity.userId);
 
-      // Accounts: savings, giving, gifts, chores (Phase 3)
+      // Accounts + Goals: single getChildDashboard call populates all cards (Phase 3–4)
       _cdLoadAccountBalances(identity.userId, gender);
     }
 
@@ -169,7 +170,8 @@ async function _cdLoadAccountBalances(userId, gender) {
     _cdRenderSavings(
       document.getElementById('savings-content'),
       data.savings.balanceAgorot,
-      gender
+      gender,
+      userId
     );
     _cdRenderGiving(
       document.getElementById('giving-content'),
@@ -200,7 +202,7 @@ async function _cdLoadAccountBalances(userId, gender) {
 
 // ── Section renderers ─────────────────────────────────────────
 
-function _cdRenderSavings(el, balanceAgorot, gender) {
+function _cdRenderSavings(el, balanceAgorot, gender, userId) {
   if (!el) return;
 
   const isSavingsFemale = gender === 'f';
@@ -213,36 +215,28 @@ function _cdRenderSavings(el, balanceAgorot, gender) {
       color: #16A34A;
       letter-spacing: -0.5px;
       line-height: 1.1;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
     ">${Currency.formatILS(balanceAgorot)}</div>
 
-    ${balanceAgorot > 0
-      ? `<p style="font-size: 0.82rem; color: #166534; margin: 0 0 8px;">
-           ${isSavingsFemale ? 'כל הכבוד — את חוסכת בצורה מדהימה!' : 'כל הכבוד — אתה חוסך בצורה מדהימה!'}
-         </p>`
-      : `<p style="font-size: 0.82rem; color: #4B7A58; margin: 0 0 8px;">
-           ${isSavingsFemale ? 'עוד לא התחלת לחסוך החודש.' : 'עוד לא התחלת לחסוך החודש.'}
-         </p>`
-    }
+    <p style="font-size: 0.82rem; color: ${balanceAgorot > 0 ? '#166534' : '#4B7A58'}; margin: 0 0 14px;">
+      ${balanceAgorot > 0
+        ? (isSavingsFemale ? 'כל הכבוד — את חוסכת בצורה מדהימה!' : 'כל הכבוד — אתה חוסך בצורה מדהימה!')
+        : (isSavingsFemale ? 'עוד לא התחלת לחסוך החודש.' : 'עוד לא התחלת לחסוך החודש.')
+      }
+    </p>
 
-    <!-- Goals placeholder (Phase 4) -->
-    <div style="
-      margin-top: 4px;
-      padding: 10px 12px;
-      background: rgba(255,255,255,0.5);
-      border-radius: 12px;
-      border: 1px dashed #86EFAC;
-    ">
-      <p style="
-        font-size: 0.82rem;
-        color: #4B7A58;
-        margin: 0;
-        text-align: center;
-      ">
-        🎯 המטרות שלי יוצגו כאן בקרוב
-      </p>
-    </div>
+    <!-- Divider -->
+    <div style="height: 1px; background: rgba(0,100,0,0.12); margin-bottom: 12px;"></div>
+
+    <!-- Goals section (Phase 4) — populated async by GoalsDisplay -->
+    <div id="goals-content"></div>
   `;
+
+  // Kick off goals fetch once the savings shell is in the DOM
+  const goalsEl = document.getElementById('goals-content');
+  if (goalsEl && userId) {
+    GoalsDisplay.render(goalsEl, userId, balanceAgorot);
+  }
 }
 
 function _cdRenderGiving(el, balanceAgorot) {

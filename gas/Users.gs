@@ -108,8 +108,8 @@ function resetDeviceIdentity(payload) {
 }
 
 // ── Stubs for later phases ────────────────────────────────────
+// Note: getChildDashboard is implemented in Accounts.gs (Phase 3) — do NOT add it here.
 
-function getChildDashboard(payload)   { throw new Error('getChildDashboard not yet implemented.'); }
 function getParentDashboard(payload)  { throw new Error('getParentDashboard not yet implemented.'); }
 function getSettings(payload)         { throw new Error('getSettings not yet implemented.'); }
 function updateSettings(payload)      { throw new Error('updateSettings not yet implemented.'); }
