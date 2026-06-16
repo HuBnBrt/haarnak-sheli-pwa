@@ -576,31 +576,66 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
       </div>`;
   }).join('');
 
+  // Transfer-row card: each denom = [wallet count] [← btn] [image] [→ btn] [selected count]
+  // RTL layout: wallet (right) ← image → selected (left)
+  // ← = move one coin/bill from wallet into payment
+  // → = return one coin/bill from payment back to wallet
   const denomRowsHTML = activeDenoms.map(d => {
     const max    = _phGetCount(walletCounts, d.agorot);
     const isCoin = d.type === 'coin';
+    const imgSrc = _phDenomImgSrc(d.agorot);
+    const h      = isCoin ? 40 : 28; // coins round; bills landscape
     return `
       <div style="
-        display:flex;align-items:center;gap:8px;
-        padding:8px 0;border-bottom:1px solid var(--color-border);
+        display:flex;align-items:center;gap:0;
+        padding:10px 6px;
+        border:1.5px solid var(--color-border);border-radius:14px;
+        margin-bottom:8px;background:var(--color-bg);
       ">
-        ${_phDenomRowImgHTML(d.agorot, isCoin)}
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:0.9rem;
-            color:${isCoin ? '#92400E' : '#065F46'};">${_phEsc(d.labelHe)}</div>
-          <div style="font-size:0.68rem;color:var(--color-text-muted);">יש: ${max}</div>
+        <!-- RIGHT: how many are still in wallet -->
+        <div style="flex:1;text-align:center;min-width:0;padding:0 4px;">
+          <div style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);
+            margin-bottom:2px;white-space:nowrap;">יש לי בארנק</div>
+          <div id="ph-avl-${d.agorot}"
+            style="font-size:1.5rem;font-weight:900;color:var(--color-text);line-height:1;">
+            ${max}
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:5px;">
-          <button class="ph-minus" data-denom="${d.agorot}" type="button"
-            style="${_phStepperBtnStyle(false)}" aria-label="פחות">−</button>
-          <div id="ph-sel-${d.agorot}" style="${_phStepperCountStyle()}">0</div>
-          <button class="ph-plus"  data-denom="${d.agorot}" type="button"
-            style="${_phStepperBtnStyle(true)}"  aria-label="יותר">+</button>
+
+        <!-- ← take one from wallet, add to payment -->
+        <button class="ph-add" id="ph-add-${d.agorot}" data-denom="${d.agorot}"
+          type="button" aria-label="העבר לתשלום"
+          style="${_phTransferBtnStyle(true)}" ${max === 0 ? 'disabled' : ''}>←</button>
+
+        <!-- CENTER: coin/bill image + label (visual identity only) -->
+        <div style="
+          display:flex;flex-direction:column;align-items:center;gap:3px;
+          min-width:54px;padding:0 4px;flex-shrink:0;
+        ">
+          ${imgSrc
+            ? `<img src="${imgSrc}"
+                style="height:${h}px;width:auto;max-width:50px;display:block;object-fit:contain;"
+                alt="" draggable="false" loading="lazy">`
+            : `<span style="font-size:0.85rem;font-weight:800;">${_phEsc(d.labelHe)}</span>`
+          }
+          <span style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);
+            white-space:nowrap;">${_phEsc(d.labelHe)}</span>
         </div>
-        <div id="ph-sub-${d.agorot}" style="
-          font-size:0.72rem;color:var(--color-text-muted);
-          min-width:48px;text-align:left;direction:ltr;
-        "></div>
+
+        <!-- → return one from payment back to wallet -->
+        <button class="ph-ret" id="ph-ret-${d.agorot}" data-denom="${d.agorot}"
+          type="button" aria-label="החזר לארנק"
+          style="${_phTransferBtnStyle(false)}" disabled>→</button>
+
+        <!-- LEFT: how many selected for payment -->
+        <div style="flex:1;text-align:center;min-width:0;padding:0 4px;">
+          <div style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);
+            margin-bottom:2px;white-space:nowrap;">בחרתי לשלם</div>
+          <div id="ph-sel-${d.agorot}"
+            style="font-size:1.5rem;font-weight:900;color:#16A34A;line-height:1;">
+            0
+          </div>
+        </div>
       </div>`;
   }).join('');
 
@@ -669,18 +704,34 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
         ? '<p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:8px;">הארנק ריק.</p>'
         : ''}
 
-      <!-- Live payment status -->
+      <!-- Payment status strip -->
       <div style="
         margin-top:14px;padding:12px 14px;
-        background:var(--color-bg-subtle,#F8FAFC);border-radius:12px;text-align:center;
+        background:var(--color-bg-subtle,#F8FAFC);border-radius:12px;
       ">
-        <div style="font-size:0.75rem;color:var(--color-text-muted);margin-bottom:3px;">
-          בחרת לשלם
+        <div style="
+          display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;
+        ">
+          <span style="font-size:0.8rem;font-weight:700;color:var(--color-text-muted);">
+            בחרתי לשלם
+          </span>
+          <span id="ph-ptotal"
+            style="font-size:1.4rem;font-weight:900;color:var(--color-text);">
+            ${Currency.formatILS(0)}
+          </span>
         </div>
-        <div id="ph-ptotal" style="font-size:1.5rem;font-weight:900;color:var(--color-text);">
-          ${Currency.formatILS(0)}
+        <div style="
+          display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;
+        ">
+          <span style="font-size:0.72rem;color:var(--color-text-muted);">
+            נשאר בארנק אחרי הבחירה
+          </span>
+          <span id="ph-wallet-rem"
+            style="font-size:0.82rem;font-weight:700;color:var(--color-text-muted);">
+            ${Currency.formatILS(walletTotalAgorot)}
+          </span>
         </div>
-        <div id="ph-pstatus" style="font-size:0.88rem;min-height:1.3em;margin-top:3px;"></div>
+        <div id="ph-pstatus" style="font-size:0.88rem;min-height:1.3em;text-align:center;margin-top:2px;"></div>
       </div>
 
       <button id="ph-next" type="button" disabled
@@ -691,7 +742,7 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
 
   document.getElementById('ph-back').addEventListener('click', goBack);
 
-  // Suggestion cards
+  // Suggestion cards — load suggestion into transfer UI
   el.querySelectorAll('.ph-sug').forEach(card => {
     card.addEventListener('click', () => {
       const idx = parseInt(card.dataset.sug, 10);
@@ -701,8 +752,8 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
       Object.entries(sug.denomCounts).forEach(([dk, c]) => {
         sel[parseInt(dk, 10)] = c;
       });
-      _phSyncPayStepperUI(el, sel);
-      _phUpdatePayStatus(el, sel, priceAgorot);
+      _phSyncTransferUI(el, sel, walletCounts);
+      _phUpdatePayStatus(el, sel, priceAgorot, walletTotalAgorot);
       el.querySelectorAll('.ph-sug').forEach((c, ci) => {
         c.style.borderColor = ci === idx ? '#0EA5E9' : '';
         c.style.background  = ci === idx ? '#EFF6FF' : '';
@@ -710,24 +761,27 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
     });
   });
 
-  // Manual steppers
-  el.querySelectorAll('.ph-plus, .ph-minus').forEach(btn => {
+  // Transfer buttons: ← move from wallet to payment, → return from payment to wallet
+  el.querySelectorAll('.ph-add').forEach(btn => {
     btn.addEventListener('click', () => {
       const denom = parseInt(btn.dataset.denom, 10);
       const max   = _phGetCount(walletCounts, denom);
-      const delta = btn.classList.contains('ph-plus') ? 1 : -1;
-      sel[denom]  = Math.max(0, Math.min(max, (sel[denom] || 0) + delta));
+      if ((sel[denom] || 0) >= max) return;
+      sel[denom] = (sel[denom] || 0) + 1;
+      _phSyncTransferUI(el, sel, walletCounts);
+      _phUpdatePayStatus(el, sel, priceAgorot, walletTotalAgorot);
+      el.querySelectorAll('.ph-sug').forEach(c => { c.style.borderColor = ''; c.style.background = ''; });
+    });
+  });
 
-      const countEl = document.getElementById(`ph-sel-${denom}`);
-      if (countEl) countEl.textContent = sel[denom];
-      const subEl = document.getElementById(`ph-sub-${denom}`);
-      if (subEl) subEl.textContent = sel[denom] > 0 ? Currency.formatILS(sel[denom] * denom) : '';
-
-      el.querySelectorAll('.ph-sug').forEach(c => {
-        c.style.borderColor = '';
-        c.style.background  = '';
-      });
-      _phUpdatePayStatus(el, sel, priceAgorot);
+  el.querySelectorAll('.ph-ret').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const denom = parseInt(btn.dataset.denom, 10);
+      if ((sel[denom] || 0) <= 0) return;
+      sel[denom] = (sel[denom] || 0) - 1;
+      _phSyncTransferUI(el, sel, walletCounts);
+      _phUpdatePayStatus(el, sel, priceAgorot, walletTotalAgorot);
+      el.querySelectorAll('.ph-sug').forEach(c => { c.style.borderColor = ''; c.style.background = ''; });
     });
   });
 
@@ -1074,14 +1128,16 @@ function _phStep4(el, userId, gender, onExit, priceAgorot, description,
 // SHARED UI UPDATE HELPERS
 // ══════════════════════════════════════════════════════════════
 
-function _phUpdatePayStatus(el, sel, priceAgorot) {
+function _phUpdatePayStatus(el, sel, priceAgorot, walletTotalAgorot) {
   const total    = _phSelTotal(sel);
   const diff     = total - priceAgorot;
   const totalEl  = document.getElementById('ph-ptotal');
+  const remEl    = document.getElementById('ph-wallet-rem');
   const statusEl = document.getElementById('ph-pstatus');
   const nextBtn  = document.getElementById('ph-next');
 
   if (totalEl) totalEl.textContent = Currency.formatILS(total);
+  if (remEl)   remEl.textContent   = Currency.formatILS((walletTotalAgorot || 0) - total);
   if (!statusEl || !nextBtn) return;
 
   if (total === 0) {
@@ -1132,14 +1188,33 @@ function _phUpdateChangeStatus(el, chg, expectedChange) {
   }
 }
 
-function _phSyncPayStepperUI(el, sel) {
+/**
+ * Syncs all transfer-row cards after sel[] changes (via button press or suggestion load).
+ * Updates available counts, selected counts, and ← / → button disabled states.
+ */
+function _phSyncTransferUI(el, sel, walletCounts) {
   Currency.DENOMINATIONS.forEach(d => {
-    const countEl = document.getElementById(`ph-sel-${d.agorot}`);
-    if (countEl) countEl.textContent = sel[d.agorot] || 0;
-    const subEl = document.getElementById(`ph-sub-${d.agorot}`);
-    if (subEl) {
-      const c = sel[d.agorot] || 0;
-      subEl.textContent = c > 0 ? Currency.formatILS(c * d.agorot) : '';
+    const max      = _phGetCount(walletCounts, d.agorot);
+    const selected = sel[d.agorot] || 0;
+    const avail    = max - selected;
+
+    const avlEl  = document.getElementById(`ph-avl-${d.agorot}`);
+    const selEl  = document.getElementById(`ph-sel-${d.agorot}`);
+    const addBtn = document.getElementById(`ph-add-${d.agorot}`);
+    const retBtn = document.getElementById(`ph-ret-${d.agorot}`);
+
+    if (avlEl) avlEl.textContent = avail;
+    if (selEl) selEl.textContent = selected;
+
+    if (addBtn) {
+      const canAdd        = avail > 0;
+      addBtn.disabled     = !canAdd;
+      addBtn.style.opacity = canAdd ? '1' : '0.3';
+    }
+    if (retBtn) {
+      const canRet        = selected > 0;
+      retBtn.disabled     = !canRet;
+      retBtn.style.opacity = canRet ? '1' : '0.3';
     }
   });
 }
@@ -1404,5 +1479,20 @@ function _phSectionLabelStyle() {
   return `
     font-size:0.75rem;font-weight:700;letter-spacing:0.06em;
     color:var(--color-text-muted);margin-bottom:8px;text-transform:uppercase;
+  `;
+}
+/**
+ * Style for the ← / → transfer buttons in Step 2 denomination cards.
+ * isAdd=true → blue (move into payment); isAdd=false → muted green (return to wallet).
+ */
+function _phTransferBtnStyle(isAdd) {
+  return `
+    width:44px;height:44px;border-radius:12px;flex-shrink:0;
+    border:2px solid ${isAdd ? '#BFDBFE' : '#D1FAE5'};
+    background:${isAdd ? '#EFF6FF' : '#ECFDF5'};
+    font-size:1.2rem;font-weight:700;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    color:${isAdd ? '#1D4ED8' : '#059669'};
+    font-family:inherit;transition:opacity 0.1s;
   `;
 }
