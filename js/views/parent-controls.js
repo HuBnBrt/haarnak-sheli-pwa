@@ -89,15 +89,21 @@ Views.ParentControls = {
           </button>
         </div>
 
-        <!-- ── Controls (Phase stubs) ─────────────────────── -->
-
+        <!-- ── Wallet editor (Phase 2) ─────────────────────── -->
+        <!--
+          _pcLoadWalletEditor() populates #pc-wallet-editor async
+          after the page shell is already visible.
+        -->
         <div class="card" style="margin-bottom: 12px;">
-          <div class="section-title">ניהול ארנק</div>
-          <p class="text-muted" style="font-size: 0.9rem;">
-            <em>עדכון מטבעות ושטרות — Phase 2</em>
-          </p>
+          <div class="section-title" style="margin-bottom: 10px;">
+            עדכון ארנק פיזי של ${_pcEscHtml(childName)}
+          </div>
+          <div id="pc-wallet-editor">
+            <p class="text-muted" style="font-size: 0.88rem;">טוען...</p>
+          </div>
         </div>
 
+        <!-- ── Phase stubs ────────────────────────────────── -->
         <div class="card" style="margin-bottom: 12px;">
           <div class="section-title">אישור מטלות ותגמולים</div>
           <p class="text-muted" style="font-size: 0.9rem;">
@@ -155,9 +161,218 @@ Views.ParentControls = {
         }
       }
     });
+
+    // ── Wallet editor: load current denominations ─────────────
+    _pcLoadWalletEditor(childIdentity.userId, parentId);
   },
 
 };
+
+// ── Wallet editor ─────────────────────────────────────────────
+
+/**
+ * Fetch current wallet and render an editable denomination form
+ * into #pc-wallet-editor.
+ */
+async function _pcLoadWalletEditor(userId, parentId) {
+  const el = document.getElementById('pc-wallet-editor');
+  if (!el) return;
+
+  try {
+    const { data } = await API.callGASWithFallback('getWalletDenominations', { userId });
+    _pcRenderWalletForm(el, userId, parentId, data.counts);
+  } catch (err) {
+    el.innerHTML = `
+      <p style="color: var(--color-danger); font-size: 0.85rem;">
+        שגיאה בטעינת הארנק: ${_pcEscHtml(err.message)}
+      </p>`;
+  }
+}
+
+/**
+ * Render the denomination input form and wire up live total + save.
+ */
+function _pcRenderWalletForm(el, userId, parentId, counts) {
+  const coins = Currency.DENOMINATIONS.filter(d => d.type === 'coin');
+  const bills = Currency.DENOMINATIONS.filter(d => d.type === 'bill');
+
+  function _getCount(agorot) {
+    const v = counts[agorot] != null ? counts[agorot] : (counts[String(agorot)] ?? 0);
+    return Math.max(0, parseInt(v, 10) || 0);
+  }
+
+  function _denomInputRow(d) {
+    const count = _getCount(d.agorot);
+    return `
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+        <label style="
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: var(--color-text);
+          min-width: 70px;
+        ">${_pcEscHtml(d.labelHe)}</label>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button
+            class="pc-denom-minus"
+            data-denom="${d.agorot}"
+            style="
+              width: 32px; height: 32px; border-radius: 8px;
+              border: 1.5px solid var(--color-border);
+              background: var(--color-bg);
+              font-size: 1.1rem; font-weight: 700;
+              cursor: pointer; color: var(--color-text-muted);
+              display: flex; align-items: center; justify-content: center;
+              flex-shrink: 0;
+            "
+            type="button"
+          >−</button>
+          <input
+            type="number"
+            min="0"
+            max="999"
+            data-denom="${d.agorot}"
+            value="${count}"
+            style="
+              width: 56px; text-align: center;
+              padding: 6px 4px;
+              border: 1.5px solid var(--color-border);
+              border-radius: 8px;
+              background: var(--color-bg);
+              color: var(--color-text);
+              font-size: 1rem;
+              font-weight: 700;
+            "
+          >
+          <button
+            class="pc-denom-plus"
+            data-denom="${d.agorot}"
+            style="
+              width: 32px; height: 32px; border-radius: 8px;
+              border: 1.5px solid var(--color-border);
+              background: var(--color-bg);
+              font-size: 1.1rem; font-weight: 700;
+              cursor: pointer; color: var(--color-primary, #0EA5E9);
+              display: flex; align-items: center; justify-content: center;
+              flex-shrink: 0;
+            "
+            type="button"
+          >+</button>
+        </div>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div>
+      <!-- Coins -->
+      <div style="font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; color: var(--color-text-muted); margin-bottom: 4px;">🪙 מטבעות</div>
+      <div style="border-bottom: 1px solid var(--color-border); margin-bottom: 12px;">
+        ${coins.slice().reverse().map(_denomInputRow).join('')}
+      </div>
+
+      <!-- Bills -->
+      <div style="font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; color: var(--color-text-muted); margin-bottom: 4px;">💵 שטרות</div>
+      <div style="border-bottom: 1px solid var(--color-border); margin-bottom: 12px;">
+        ${bills.slice().reverse().map(_denomInputRow).join('')}
+      </div>
+
+      <!-- Live total -->
+      <div id="pc-wallet-total" style="
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--color-primary, #0EA5E9);
+        margin-bottom: 14px;
+        text-align: center;
+      ">סה"כ: ${Currency.formatILS(_pcCalcTotal(el, counts))}</div>
+
+      <!-- Status / error area -->
+      <div id="pc-wallet-status" style="min-height: 1.4em; font-size: 0.85rem; margin-bottom: 10px; text-align: center;"></div>
+
+      <!-- Save -->
+      <button
+        id="pc-wallet-save-btn"
+        class="btn btn-primary btn-full"
+        type="button"
+      >שמור ארנק</button>
+    </div>
+  `;
+
+  // ── Wire up +/− steppers ─────────────────────────────────
+  el.querySelectorAll('.pc-denom-plus, .pc-denom-minus').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const denom = btn.dataset.denom;
+      const input = el.querySelector(`input[data-denom="${denom}"]`);
+      if (!input) return;
+      const delta = btn.classList.contains('pc-denom-plus') ? 1 : -1;
+      const newVal = Math.max(0, (parseInt(input.value, 10) || 0) + delta);
+      input.value = newVal;
+      _pcUpdateWalletTotal(el);
+    });
+  });
+
+  // ── Wire up direct input changes ─────────────────────────
+  el.querySelectorAll('input[data-denom]').forEach(input => {
+    input.addEventListener('input', () => _pcUpdateWalletTotal(el));
+  });
+
+  // ── Save ─────────────────────────────────────────────────
+  document.getElementById('pc-wallet-save-btn').addEventListener('click', async () => {
+    const saveBtn  = document.getElementById('pc-wallet-save-btn');
+    const statusEl = document.getElementById('pc-wallet-status');
+    if (!saveBtn || !statusEl) return;
+
+    // Collect current values
+    const newCounts = {};
+    el.querySelectorAll('input[data-denom]').forEach(input => {
+      newCounts[parseInt(input.dataset.denom, 10)] = Math.max(0, parseInt(input.value, 10) || 0);
+    });
+
+    saveBtn.disabled    = true;
+    saveBtn.textContent = 'שומר...';
+    statusEl.style.color = 'var(--color-text-muted)';
+    statusEl.textContent = '';
+
+    try {
+      const { data } = await API.callGASWithFallback('updatePhysicalWallet', {
+        userId,
+        parentId,
+        counts: newCounts,
+      });
+
+      statusEl.style.color = '#16A34A';
+      statusEl.textContent = `✓ נשמר! סה"כ: ${Currency.formatILS(data.totalAgorot)}`;
+      saveBtn.textContent  = 'שמור ארנק';
+      saveBtn.disabled     = false;
+
+    } catch (err) {
+      statusEl.style.color = 'var(--color-danger)';
+      statusEl.textContent = 'שגיאה: ' + err.message;
+      saveBtn.textContent  = 'שמור ארנק';
+      saveBtn.disabled     = false;
+    }
+  });
+}
+
+/** Recalculate total from current input values and update the total display. */
+function _pcUpdateWalletTotal(el) {
+  let total = 0;
+  el.querySelectorAll('input[data-denom]').forEach(input => {
+    const denom = parseInt(input.dataset.denom, 10);
+    const count = Math.max(0, parseInt(input.value, 10) || 0);
+    total += denom * count;
+  });
+  const totalEl = document.getElementById('pc-wallet-total');
+  if (totalEl) totalEl.textContent = `סה"כ: ${Currency.formatILS(total)}`;
+}
+
+/** Calculate initial total from saved counts (before any edits). */
+function _pcCalcTotal(el, counts) {
+  let total = 0;
+  Currency.DENOMINATIONS.forEach(d => {
+    const v = counts[d.agorot] != null ? counts[d.agorot] : (counts[String(d.agorot)] ?? 0);
+    total += d.agorot * Math.max(0, parseInt(v, 10) || 0);
+  });
+  return total;
+}
 
 // ── Helpers ───────────────────────────────────────────────────
 

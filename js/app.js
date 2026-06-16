@@ -70,14 +70,11 @@ const App = (() => {
       return;
     }
 
-    // Gate 3: #setup hash with identity still in place.
-    // (This can happen right after a reset before navigate fires.)
-    if (hash === 'setup') {
-      console.log('[app] #setup hash — rendering setup');
-      VIEWS['setup']();
-      console.log('[app] setup rendered');
-      return;
-    }
+    // Gate 3 (intentionally absent):
+    // If a device has a valid identity, typing #setup in the address
+    // bar does NOT give access to the setup screen or the
+    // "שנה כתובת שרת" button. The only path back to setup is
+    // device reset via parent controls (requires parent PIN).
 
     // Gate 4: Route strictly by identity type.
     //
