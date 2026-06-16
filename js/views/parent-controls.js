@@ -103,6 +103,30 @@ Views.ParentControls = {
           </div>
         </div>
 
+        <!-- ── Purchase helper (Phase 5) ──────────────────── -->
+        <div class="card" style="margin-bottom: 12px;">
+          <div class="section-title" style="margin-bottom: 10px;">
+            🛒 קנייה עם ${_pcEscHtml(childName)}
+          </div>
+          <p class="text-muted" style="font-size:0.85rem; margin-bottom:10px; line-height:1.5;">
+            עוזר קנייה — בחירת תשלום, עודף, ועדכון הארנק.
+          </p>
+          <button
+            id="pc-purchase-btn"
+            type="button"
+            style="
+              width:100%; padding:12px 16px;
+              background:linear-gradient(135deg,#16A34A 0%,#22C55E 100%);
+              color:#fff; border:none; border-radius:14px;
+              font-size:0.95rem; font-weight:800; cursor:pointer;
+              box-shadow:0 3px 8px rgba(22,163,74,0.25);
+              font-family:inherit;
+            "
+          >
+            🛒 פתח עוזר קנייה
+          </button>
+        </div>
+
         <!-- ── Phase stubs ────────────────────────────────── -->
         <div class="card" style="margin-bottom: 12px;">
           <div class="section-title">אישור מטלות ותגמולים</div>
@@ -161,6 +185,21 @@ Views.ParentControls = {
         }
       }
     });
+
+    // ── Purchase helper button ────────────────────────────────
+    const purchaseBtn = document.getElementById('pc-purchase-btn');
+    if (purchaseBtn) {
+      purchaseBtn.addEventListener('click', () => {
+        if (window.PurchaseHelper) {
+          PurchaseHelper.start(
+            container,
+            childIdentity.userId,
+            childIdentity.gender || 'm',
+            () => Views.ParentControls.render(container, { parentId, parentName, childIdentity, onExit })
+          );
+        }
+      });
+    }
 
     // ── Wallet editor: load current denominations ─────────────
     _pcLoadWalletEditor(childIdentity.userId, parentId);

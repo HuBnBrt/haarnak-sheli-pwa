@@ -42,6 +42,19 @@ window.WalletDisplay = {
       if (btn) {
         btn.addEventListener('click', () => _renderCountEditor(el, userId));
       }
+
+      // Wire "קנייה בחנות" button — launches PurchaseHelper (Phase 5)
+      const purchaseBtn = el.querySelector('#wd-purchase-btn');
+      if (purchaseBtn) {
+        purchaseBtn.addEventListener('click', () => {
+          const identity = window.Auth ? Auth.getIdentity() : null;
+          const gender   = identity ? (identity.gender || 'm') : 'm';
+          if (window.PurchaseHelper) {
+            PurchaseHelper.start(el, userId, gender, () =>
+              WalletDisplay.renderReadOnly(el, userId));
+          }
+        });
+      }
     } catch (err) {
       el.innerHTML = `
         <p style="color: var(--color-danger); font-size: 0.85rem; margin: 6px 0 0;">
@@ -110,6 +123,36 @@ function _buildReadOnlyHTML(counts, totalAgorot) {
         type="button"
       >
         🪙 ספרתי את הארנק שלי
+      </button>
+
+      <!-- Child action: purchase helper (Phase 5) -->
+      <button
+        id="wd-purchase-btn"
+        style="
+          margin-top: 10px;
+          width: 100%;
+          padding: 14px 16px;
+          background: linear-gradient(135deg, #16A34A 0%, #22C55E 100%);
+          color: #fff;
+          border: none;
+          border-radius: 16px;
+          font-size: 1.05rem;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(22,163,74,0.28);
+          transition: transform 0.12s, box-shadow 0.12s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        "
+        onmousedown="this.style.transform='scale(0.97)'"
+        onmouseup="this.style.transform=''"
+        onmouseleave="this.style.transform=''"
+        type="button"
+      >
+        🛒 קנייה בחנות
       </button>
     </div>`;
 }
