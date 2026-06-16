@@ -70,6 +70,7 @@ function doPost(e) {
 
       // ── Wallet & Purchase (Phase 2, 5) ────────────────────
       case 'getWalletDenominations':  result = getWalletDenominations(payload);  break;
+      case 'countWallet':             result = countWallet(payload);             break;
       case 'updatePhysicalWallet':    result = updatePhysicalWallet(payload);    break;
       case 'getPurchaseSuggestions':  result = getPurchaseSuggestions(payload);  break;
       case 'recordPurchase':          result = recordPurchase(payload);          break;
