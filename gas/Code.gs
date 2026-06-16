@@ -77,11 +77,12 @@ function doPost(e) {
       case 'redeemSavingsToWallet':   result = redeemSavingsToWallet(payload);   break;
 
       // ── Goals (Phase 4) ───────────────────────────────────
-      case 'getGoals':        result = getGoals(payload);       break;
-      case 'createGoal':      result = createGoal(payload);     break;
-      case 'updateGoal':      result = updateGoal(payload);     break;
-      case 'cancelGoal':      result = cancelGoal(payload);     break;
-      case 'completeGoal':    result = completeGoal(payload);   break;
+      case 'getGoals':             result = getGoals(payload);            break;
+      case 'createGoal':           result = createGoal(payload);          break;
+      case 'updateGoal':           result = updateGoal(payload);          break;
+      case 'cancelGoal':           result = cancelGoal(payload);          break;
+      case 'completeGoal':         result = completeGoal(payload);        break;
+      case 'getPurchasableGoals':  result = getPurchasableGoals(payload); break;
 
       // ── Goal Images (Phase 9) ─────────────────────────────
       case 'uploadGoalImage':  result = uploadGoalImage(payload);  break;

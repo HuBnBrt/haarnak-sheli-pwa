@@ -224,11 +224,177 @@ function cancelGoal(payload) {
 }
 
 /**
- * Mark a goal as completed after a purchase.
- * Phase 5: implement as part of the purchase helper flow.
+ * Mark a goal as completed and deduct the purchase price from the savings account.
+ * Called when the child confirms a goal purchase in the purchase helper (Phase 5.2).
+ *
+ * The actual purchase price may differ from the saved target price
+ * (e.g. if the store price changed). Both values are recorded.
+ *
+ * @param {{
+ *   userId:            string,
+ *   goalId:            string,
+ *   actualPriceAgorot: number,  — actual price paid (may differ from target)
+ * }} payload
+ * @returns {{ ok: true, newSavingsAgorot: number }}
  */
 function completeGoal(payload) {
-  throw new Error('completeGoal: לא מומש עדיין (Phase 5).');
+  var userId               = payload.userId;
+  var goalId               = payload.goalId;
+  var priceInput           = payload.actualPriceAgorot;
+  // When true: physical wallet payment was already recorded by recordPurchase.
+  // Skip savings deduction — savings reconciliation is handled separately
+  // (e.g. via redeemSavingsToWallet, which is a separate parent action).
+  var skipSavingsDeduction = payload.skipSavingsDeduction === true;
+
+  if (!userId)     throw new Error('completeGoal: userId נדרש.');
+  if (!goalId)     throw new Error('completeGoal: goalId נדרש.');
+  if (!priceInput) throw new Error('completeGoal: actualPriceAgorot נדרש.');
+
+  var actualPrice = Math.round(Number(priceInput));
+  if (!actualPrice || actualPrice <= 0) throw new Error('completeGoal: מחיר חוקי נדרש (גדול מ-0).');
+
+  // Validate user
+  var users = readTab('users');
+  var user  = users.filter(function(u) {
+    return u['user_id'] === userId && u['active'] === true;
+  })[0];
+  if (!user) throw new Error('משתמש לא נמצא או אינו פעיל.');
+
+  // Find goal row in the goals sheet
+  var sheet   = getSheet('goals');
+  var data    = sheet.getDataRange().getValues();
+  var headers = data[0].map(function(h) { return String(h).trim(); });
+
+  var iGoalId      = headers.indexOf('goal_id');
+  var iUserId      = headers.indexOf('user_id');
+  var iTitle       = headers.indexOf('title');
+  var iTarget      = headers.indexOf('target_amount_agorot');
+  var iStatus      = headers.indexOf('status');
+  var iCompletedAt = headers.indexOf('completed_at');
+  var iNotes       = headers.indexOf('notes');
+
+  var sheetRow = -1;
+  var rowData  = null;
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][iGoalId]) === String(goalId) &&
+        String(data[i][iUserId]) === String(userId)) {
+      sheetRow = i + 1; // 1-indexed
+      rowData  = data[i];
+      break;
+    }
+  }
+
+  if (sheetRow < 0) throw new Error('מטרה לא נמצאה.');
+  if (String(rowData[iStatus]) !== 'active') throw new Error('המטרה כבר לא פעילה (אולי כבר נקנתה?).');
+
+  var goalTitle    = String(rowData[iTitle]);
+  var targetAgorot = Math.max(1, parseInt(rowData[iTarget], 10) || 0);
+
+  // ── Financial side ───────────────────────────────────────────
+  var balResult;
+  if (!skipSavingsDeduction) {
+    // Standard virtual path: deduct from savings account (savings → external).
+    // Used when the goal is paid directly from savings without going through
+    // the physical wallet (future flow, or savings-only purchases).
+    var savingsBefore = _getAccountBalance(userId, 'savings');
+    if (savingsBefore < actualPrice) {
+      var missingAgorot = actualPrice - savingsBefore;
+      throw new Error(
+        'יתרת החיסכון (' + (savingsBefore / 100).toFixed(2) + '₪) ' +
+        'אינה מספיקה לקנייה (' + (actualPrice / 100).toFixed(2) + '₪). ' +
+        'חסרים ' + (missingAgorot / 100).toFixed(2) + '₪.'
+      );
+    }
+    balResult = _addToAccountBalance(userId, 'savings', -actualPrice);
+    _appendTransaction({
+      userId:       userId,
+      fromAccount:  'savings',
+      toAccount:    'external',
+      amountAgorot: actualPrice,
+      type:         'goal_purchase',
+      description:  goalTitle,
+      initiatedBy:  'child',
+      notes:        JSON.stringify({ goalId: goalId, targetAgorot: targetAgorot }),
+    });
+  } else {
+    // Wallet-purchase path: recordPurchase already recorded the financial
+    // transaction (physical_wallet → external). Savings balance is not
+    // touched here — reconciliation via redeemSavingsToWallet is separate.
+    var currentSavings = _getAccountBalance(userId, 'savings');
+    balResult = { before: currentSavings, after: currentSavings };
+  }
+
+  // ── Mark goal completed ──────────────────────────────────────
+  var now = new Date().toISOString();
+  sheet.getRange(sheetRow, iStatus + 1).setValue('completed');
+  if (iCompletedAt >= 0) sheet.getRange(sheetRow, iCompletedAt + 1).setValue(now);
+
+  // Update notes JSON with actual purchase price and completion timestamp
+  if (iNotes >= 0) {
+    var meta = _parseGoalNotes(String(rowData[iNotes] || '{}'));
+    meta.actualPriceAgorot    = actualPrice;
+    meta.completedAt          = now;
+    meta.walletPurchase       = skipSavingsDeduction; // true = paid from physical wallet
+    sheet.getRange(sheetRow, iNotes + 1).setValue(JSON.stringify(meta));
+  }
+
+  appendAuditLog({
+    actingUserId:       userId,
+    childUserId:        userId,
+    actionType:         'goal_purchased',
+    accountAffected:    skipSavingsDeduction ? 'wallet' : 'savings',
+    amountBeforeAgorot: balResult.before,
+    amountAfterAgorot:  balResult.after,
+    notes:              'goal_id=' + goalId + ' title=' + goalTitle +
+                        ' target=' + targetAgorot + ' actual_price=' + actualPrice +
+                        (skipSavingsDeduction ? ' source=wallet' : ' source=savings'),
+    source:             'child',
+  });
+
+  return { ok: true, newSavingsAgorot: balResult.after };
+}
+
+/**
+ * Return active goals + account balances for the purchase helper's Step 0 screen.
+ * "Purchasable" goals are those where the child's current savings balance covers
+ * the goal's target price (savingsAgorot >= goal.targetAgorot).
+ *
+ * Savings is a shared balance across all goals; purchasing one goal reduces
+ * what is available for others. The frontend must re-check affordability
+ * as the user builds a multi-goal cart.
+ *
+ * @param {{ userId: string }} payload
+ * @returns {{
+ *   savingsAgorot:    number,
+ *   walletTotalAgorot: number,
+ *   goals:            Array,   — all active goals
+ *   purchasableGoals: Array,   — active goals where savings >= target
+ * }}
+ */
+function getPurchasableGoals(payload) {
+  var userId = payload.userId;
+  if (!userId) throw new Error('getPurchasableGoals: userId נדרש.');
+
+  var users = readTab('users');
+  var user  = users.filter(function(u) {
+    return u['user_id'] === userId && u['active'] === true;
+  })[0];
+  if (!user) throw new Error('משתמש לא נמצא או אינו פעיל.');
+
+  var savingsAgorot     = _getAccountBalance(userId, 'savings');
+  var walletTotalAgorot = _getWalletTotal(userId);
+  var goals             = getGoals({ userId: userId });
+
+  var purchasableGoals = goals.filter(function(g) {
+    return g.targetAgorot > 0 && savingsAgorot >= g.targetAgorot;
+  });
+
+  return {
+    savingsAgorot:     savingsAgorot,
+    walletTotalAgorot: walletTotalAgorot,
+    goals:             goals,
+    purchasableGoals:  purchasableGoals,
+  };
 }
 
 // ── Internal helpers ──────────────────────────────────────────
