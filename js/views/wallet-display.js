@@ -68,92 +68,127 @@ window.WalletDisplay = {
 // ── Read-only display ─────────────────────────────────────────
 
 function _buildReadOnlyHTML(counts, totalAgorot) {
-  const coins = Currency.DENOMINATIONS.filter(d => d.type === 'coin');
-  const bills = Currency.DENOMINATIONS.filter(d => d.type === 'bill');
-
-  const coinsHTML = _sectionHTML('מטבעות', coins, counts, '#FEF9C3', '#D97706', '#92400E', '🪙');
-  const billsHTML = _sectionHTML('שטרות',  bills, counts, '#ECFDF5', '#34D399', '#065F46', '💵');
+  // Child wallet denominations displayed in a 4-column CSS grid, ascending (small→large).
+  // Row 1: 10ag, 50ag, 1₪, 2₪  (all coins)
+  // Row 2: 5₪, 10₪ (1 col each) + 20₪ bill (span 2)
+  // Large bills (50₪, 100₪, 200₪): flex row below if present
+  const CHILD_COINS_R1 = [10, 50, 100, 200];
+  const CHILD_COINS_R2 = [500, 1000];
+  const BILL_MAIN      = 2000;
+  const LARGE_BILLS    = [5000, 10000, 20000];
 
   const isEmpty = totalAgorot === 0;
+
+  function getD(agorot) {
+    return Currency.DENOMINATIONS.find(d => d.agorot === agorot);
+  }
+
+  function denomCellHTML(agorot, isCoin, span) {
+    const d = getD(agorot);
+    if (!d) return '';
+    const count    = _getCount(counts, agorot);
+    const subTotal = count * agorot;
+    const imgHTML  = _wdDenomImg(agorot, isCoin);
+    const hasVal   = count > 0;
+
+    const bg      = hasVal ? (isCoin ? '#FEF9C3' : '#ECFDF5') : 'var(--color-bg-subtle,#F8FAFC)';
+    const border  = hasVal ? (isCoin ? '#D97706' : '#34D399') : 'var(--color-border)';
+    const textCol = hasVal ? (isCoin ? '#92400E' : '#065F46') : 'var(--color-text-muted)';
+
+    return `
+      <div style="
+        ${span > 1 ? `grid-column: span ${span};` : ''}
+        padding: 8px 4px 6px;
+        display: flex; flex-direction: column; align-items: center; gap: 3px;
+        border-radius: 10px;
+        background: ${bg}; border: 1.5px solid ${border};
+        opacity: ${hasVal ? '1' : '0.38'};
+        min-width: 0;
+      ">
+        <div style="height: ${isCoin ? 46 : 32}px; display: flex; align-items: center; justify-content: center; width: 100%;">
+          ${imgHTML || `<span style="font-size:0.75rem;font-weight:700;color:${textCol};">${_wdEsc(d.labelHe)}</span>`}
+        </div>
+        <div style="font-weight:900;font-size:1.5rem;color:${textCol};line-height:1;">${count}</div>
+        <div style="font-size:0.64rem;font-weight:700;color:${textCol};white-space:nowrap;text-align:center;">${_wdEsc(d.labelHe)}</div>
+        ${hasVal ? `<div style="font-size:0.58rem;color:${textCol};opacity:0.72;white-space:nowrap;text-align:center;">= ${Currency.formatILS(subTotal)}</div>` : ''}
+      </div>`;
+  }
+
+  const presentLargeBills = LARGE_BILLS.filter(a => _getCount(counts, a) > 0);
+  const largeBillsHTML = presentLargeBills.length > 0 ? `
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;direction:rtl;">
+      ${presentLargeBills.map(a => {
+        const d = getD(a);
+        const n = _getCount(counts, a);
+        return `
+          <div style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;
+            padding:8px 12px;border-radius:10px;background:#ECFDF5;border:1.5px solid #34D399;">
+            <div style="height:28px;display:flex;align-items:center;">${_wdDenomImg(a, false)}</div>
+            <div style="font-weight:900;font-size:1.3rem;color:#065F46;">${n}</div>
+            <div style="font-size:0.68rem;font-weight:700;color:#065F46;">${_wdEsc(d.labelHe)}</div>
+            <div style="font-size:0.62rem;color:#065F46;opacity:0.7;">= ${Currency.formatILS(n * a)}</div>
+          </div>`;
+      }).join('')}
+    </div>` : '';
+
+  const denomGridHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px;">
+      ${CHILD_COINS_R1.map(a => denomCellHTML(a, true, 1)).join('')}
+      ${CHILD_COINS_R2.map(a => denomCellHTML(a, true, 1)).join('')}
+      ${denomCellHTML(BILL_MAIN, false, 2)}
+    </div>
+    ${largeBillsHTML}`;
 
   return `
     <div style="margin-top: 4px;">
       <!-- Total balance -->
       <div style="
-        font-size: 2.1rem;
-        font-weight: 800;
+        font-size: 2.1rem; font-weight: 800;
         color: var(--color-primary, #0EA5E9);
-        letter-spacing: -0.5px;
-        line-height: 1.1;
-        margin-bottom: 2px;
+        letter-spacing: -0.5px; line-height: 1.1; margin-bottom: 2px;
       ">${Currency.formatILS(totalAgorot)}</div>
 
       ${isEmpty
-        ? `<p style="color: var(--color-text-muted); font-size: 0.9rem; margin: 10px 0 4px;">
+        ? `<p style="color:var(--color-text-muted);font-size:0.9rem;margin:10px 0 4px;">
              הארנק הפיזי ריק כרגע.
            </p>`
-        : `${coinsHTML}${billsHTML}`
-      }
+        : denomGridHTML}
 
-      <!-- Child action: count wallet -->
-      <button
-        id="wd-count-btn"
-        style="
-          margin-top: 18px;
-          width: 100%;
-          padding: 14px 16px;
-          background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%);
-          color: #fff;
-          border: none;
-          border-radius: 16px;
-          font-size: 1.05rem;
-          font-weight: 800;
-          letter-spacing: 0.01em;
-          cursor: pointer;
-          box-shadow: 0 4px 12px rgba(14,165,233,0.30);
-          transition: transform 0.12s, box-shadow 0.12s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        "
-        onmousedown="this.style.transform='scale(0.97)'"
-        onmouseup="this.style.transform=''"
-        onmouseleave="this.style.transform=''"
-        type="button"
-      >
-        🪙 ספרתי את הארנק שלי
-      </button>
-
-      <!-- Child action: purchase helper (Phase 5) -->
-      <button
-        id="wd-purchase-btn"
-        style="
-          margin-top: 10px;
-          width: 100%;
-          padding: 14px 16px;
-          background: linear-gradient(135deg, #16A34A 0%, #22C55E 100%);
-          color: #fff;
-          border: none;
-          border-radius: 16px;
-          font-size: 1.05rem;
-          font-weight: 800;
-          letter-spacing: 0.01em;
-          cursor: pointer;
-          box-shadow: 0 4px 12px rgba(22,163,74,0.28);
-          transition: transform 0.12s, box-shadow 0.12s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        "
-        onmousedown="this.style.transform='scale(0.97)'"
-        onmouseup="this.style.transform=''"
-        onmouseleave="this.style.transform=''"
-        type="button"
-      >
-        🛒 קנייה בחנות
-      </button>
+      <!-- Action buttons: side by side -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;">
+        <button id="wd-count-btn"
+          style="
+            padding: 13px 10px;
+            background: linear-gradient(135deg, #0EA5E9 0%, #38BDF8 100%);
+            color: #fff; border: none; border-radius: 14px;
+            font-size: 0.88rem; font-weight: 800;
+            cursor: pointer; box-shadow: 0 3px 10px rgba(14,165,233,0.28);
+            transition: transform 0.12s; font-family: inherit;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+          "
+          onmousedown="this.style.transform='scale(0.97)'"
+          onmouseup="this.style.transform=''"
+          onmouseleave="this.style.transform=''"
+          type="button">
+          🪙 עדכון ארנק
+        </button>
+        <button id="wd-purchase-btn"
+          style="
+            padding: 13px 10px;
+            background: linear-gradient(135deg, #16A34A 0%, #22C55E 100%);
+            color: #fff; border: none; border-radius: 14px;
+            font-size: 0.88rem; font-weight: 800;
+            cursor: pointer; box-shadow: 0 3px 10px rgba(22,163,74,0.26);
+            transition: transform 0.12s; font-family: inherit;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+          "
+          onmousedown="this.style.transform='scale(0.97)'"
+          onmouseup="this.style.transform=''"
+          onmouseleave="this.style.transform=''"
+          type="button">
+          🛒 קנייה
+        </button>
+      </div>
     </div>`;
 }
 
@@ -260,7 +295,7 @@ async function _renderEditorShell(el, userId, existingCounts) {
           aria-label="חזרה"
         >←</button>
         <div style="font-size: 1.1rem; font-weight: 800; color: var(--color-text);">
-          🪙 ספרתי את הארנק שלי
+          🪙 עדכון תכולת הארנק שלי
         </div>
       </div>
       <p style="color: var(--color-text-muted); font-size: 0.88rem; text-align: center; padding: 20px 0;">
@@ -443,7 +478,7 @@ function _renderEditorForm(el, userId, counts) {
           aria-label="חזרה"
         >←</button>
         <div style="font-size: 1.1rem; font-weight: 800; color: var(--color-text);">
-          🪙 ספרתי את הארנק שלי
+          🪙 עדכון תכולת הארנק שלי
         </div>
       </div>
 

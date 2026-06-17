@@ -387,7 +387,8 @@ function recordPurchase(payload) {
  */
 function _computeSuggestions(availCounts, priceAgorot) {
   var ALL_DENOMS  = [20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50, 10]; // large→small
-  var COIN_FIRST  = [10, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]; // small→large
+  var SMALL_FIRST = [10, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]; // small→large
+  var COINS_ONLY  = [10, 50, 100, 200, 500, 1000];                           // coin denoms only
 
   // Normalise available counts (handles string or number keys)
   var avail = {};
@@ -400,10 +401,42 @@ function _computeSuggestions(availCounts, priceAgorot) {
   if (walletTotal < priceAgorot) return [];
 
   /**
-   * Greedy builder: use denominations in `denomOrder`, then round up if needed.
-   * Returns { counts, totalPaid, exact } or null if wallet can't cover price.
+   * DP-based exact search.
+   * BFS-style: fills dp[0..priceAgorot], where dp[amt] = coin-counts map that
+   * reaches exactly `amt` using denominations in `denomOrder`.
+   * Returns the count map (exact payment) or null.
+   * Safe for priceAgorot ≤ 50000 (500 ₪): O(target × |denoms|).
    */
-  function buildPayment(denomOrder) {
+  function findExactDP(denomOrder) {
+    if (priceAgorot > 50000) return null; // safety cap
+    var dp = new Array(priceAgorot + 1).fill(null);
+    dp[0] = {};
+    for (var amt = 0; amt < priceAgorot; amt++) {
+      if (dp[amt] === null) continue;
+      for (var i = 0; i < denomOrder.length; i++) {
+        var d    = denomOrder[i];
+        var used = dp[amt][d] || 0;
+        if (used >= (avail[d] || 0)) continue;
+        var next = amt + d;
+        if (next > priceAgorot) continue;
+        if (dp[next] === null) {
+          // Copy current map and add one more of this denomination
+          var ns = {};
+          var keys = Object.keys(dp[amt]);
+          for (var k = 0; k < keys.length; k++) ns[keys[k]] = dp[amt][keys[k]];
+          ns[d] = used + 1;
+          dp[next] = ns;
+        }
+      }
+    }
+    return dp[priceAgorot]; // null if no exact solution
+  }
+
+  /**
+   * Greedy builder: use denominations in `denomOrder`, round up if needed.
+   * Returns { counts, totalPaid, exact } or null.
+   */
+  function buildGreedy(denomOrder) {
     var counts = {};
     var rem    = priceAgorot;
 
@@ -415,75 +448,81 @@ function _computeSuggestions(availCounts, priceAgorot) {
       if (use > 0) { counts[d] = use; rem -= use * d; }
     }
 
-    var exact = rem === 0;
-
-    if (!exact) {
-      // Round up: find smallest available denomination >= remaining shortfall
-      var asc = ALL_DENOMS.slice().reverse(); // small→large
-      var rounded = false;
-      for (var j = 0; j < asc.length; j++) {
-        var dj   = asc[j];
-        var avdj = avail[dj] || 0;
-        var usedj = counts[dj] || 0;
-        if (avdj > usedj && dj >= rem) {
-          counts[dj] = usedj + 1;
-          rem -= dj;
-          rounded = true;
-          break;
-        }
-      }
-      if (!rounded) return null; // wallet can't cover price
+    if (rem === 0) {
+      var c1 = {};
+      ALL_DENOMS.forEach(function(d) { if ((counts[d] || 0) > 0) c1[d] = counts[d]; });
+      return { counts: c1, totalPaid: priceAgorot, exact: true };
     }
 
-    // Validate: never use more of any denomination than available
+    // Round up: smallest available denomination >= remaining shortfall
+    var rounded = false;
+    for (var j = 0; j < SMALL_FIRST.length; j++) {
+      var dj    = SMALL_FIRST[j];
+      var avdj  = avail[dj] || 0;
+      var usedj = counts[dj] || 0;
+      if (avdj > usedj && dj >= rem) {
+        counts[dj] = usedj + 1; rem -= dj; rounded = true; break;
+      }
+    }
+    if (!rounded) return null;
+
     for (var k = 0; k < ALL_DENOMS.length; k++) {
       var dk = ALL_DENOMS[k];
       if ((counts[dk] || 0) > (avail[dk] || 0)) return null;
     }
 
-    // Clean: remove zero entries
     var clean = {};
     ALL_DENOMS.forEach(function(d) { if ((counts[d] || 0) > 0) clean[d] = counts[d]; });
-
     var total = ALL_DENOMS.reduce(function(s, d) { return s + (clean[d] || 0) * d; }, 0);
-    return { counts: clean, totalPaid: total, exact: (rem <= 0 && exact) };
+    return { counts: clean, totalPaid: total, exact: false };
   }
 
-  var sA = buildPayment(COIN_FIRST); // coin-reduction strategy
-  var sB = buildPayment(ALL_DENOMS); // large-first strategy
-
-  // Stringify counts for deduplication comparison
   function countsKey(c) {
     return ALL_DENOMS.map(function(d) { return c[d] || 0; }).join(',');
   }
 
-  var suggestions = [];
+  // Strategy A: exact coin-only payment (ideal — avoids unnecessary bills)
+  var dpCoins = findExactDP(COINS_ONLY);
+  // Strategy B: exact small-first payment (uses all denoms, still prefers coins)
+  var dpSmall = dpCoins ? null : findExactDP(SMALL_FIRST);
+  // Strategy C: large-first greedy (fewest pieces; may overpay)
+  var greedyLarge = buildGreedy(ALL_DENOMS);
 
-  // B (large-first) is always the fallback suggestion
-  if (sB) {
-    suggestions.push({
-      label:           sB.exact ? 'הכי מעט מטבעות' : 'תשלום עם עודף מינימלי',
-      denomCounts:     sB.counts,
-      totalPaidAgorot: sB.totalPaid,
-      changeAgorot:    sB.totalPaid - priceAgorot,
-      exact:           sB.exact,
+  var seen    = {};
+  var results = [];
+
+  function addCandidate(label, counts, totalPaid, exact) {
+    var key = countsKey(counts);
+    if (seen[key]) return;
+    seen[key] = true;
+    results.push({
+      label:           label,
+      denomCounts:     counts,
+      totalPaidAgorot: totalPaid,
+      changeAgorot:    totalPaid - priceAgorot,
+      exact:           exact,
     });
   }
 
-  // A (coin-first) only if it produces a DIFFERENT result that is not worse
-  if (sA && (!sB || countsKey(sA.counts) !== countsKey(sB.counts))) {
-    if (sA.exact || !sB || sA.totalPaid <= sB.totalPaid) {
-      suggestions.unshift({         // prepend: coin-reduction shown first
-        label:           'שימוש במטבעות קטנים',
-        denomCounts:     sA.counts,
-        totalPaidAgorot: sA.totalPaid,
-        changeAgorot:    sA.totalPaid - priceAgorot,
-        exact:           sA.exact,
-      });
-    }
+  // Preferred: coin-only exact
+  if (dpCoins) {
+    var t = ALL_DENOMS.reduce(function(s, d) { return s + (dpCoins[d] || 0) * d; }, 0);
+    addCandidate('תשלום מדויק במטבעות', dpCoins, t, true);
+  }
+  // Fallback exact: small-first (may include a bill)
+  if (dpSmall) {
+    var t2 = ALL_DENOMS.reduce(function(s, d) { return s + (dpSmall[d] || 0) * d; }, 0);
+    addCandidate('תשלום מדויק', dpSmall, t2, true);
+  }
+  // Fewest-pieces greedy
+  if (greedyLarge) {
+    addCandidate(
+      greedyLarge.exact ? 'הכי מעט מטבעות ושטרות' : 'תשלום עם עודף מינימלי',
+      greedyLarge.counts, greedyLarge.totalPaid, greedyLarge.exact
+    );
   }
 
-  return suggestions;
+  return results.slice(0, 2);
 }
 
 /**
