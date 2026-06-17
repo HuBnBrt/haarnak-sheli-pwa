@@ -171,7 +171,17 @@ function _gdRenderList(el, userId, savingsAgorot, walletAgorot, goals) {
     }
   });
 
-  // "✓ שמור" — save updated price via API then re-render
+  // Enter key in price input → trigger save
+  el.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const inp = e.target.closest('.gd-price-input');
+    if (!inp) return;
+    const gid    = inp.dataset.goalId;
+    const saveBtn = el.querySelector(`.gd-price-save-btn[data-goal-id="${gid}"]`);
+    if (saveBtn && !saveBtn.disabled) saveBtn.click();
+  });
+
+  // "✓ שמור מחיר" — save updated price via API then re-render
   el.addEventListener('click', async e => {
     const btn = e.target.closest('.gd-price-save-btn');
     if (!btn || btn.disabled) return;
@@ -208,17 +218,20 @@ function _gdRenderList(el, userId, savingsAgorot, walletAgorot, goals) {
  */
 function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
   const target  = goal.targetAgorot;
-  const saved   = Math.min(savingsAgorot, target); // §9a: capped at target
+  // Guard against undefined/NaN savingsAgorot (§9a: savings only)
+  const sAgorot = (typeof savingsAgorot === 'number' && !isNaN(savingsAgorot)) ? savingsAgorot : 0;
+  const saved   = Math.min(sAgorot, target); // §9a: capped at target
   const pct     = target > 0 ? Math.min(100, Math.floor(saved * 100 / target)) : 0;
 
-  // §9a: savings progress colours
+  // §9a: savings progress — red→orange→amber→lime→green spectrum
   const barFill = pct >= 100 ? '#16A34A'
-    : pct >= 66  ? '#0EA5E9'
-    : pct >= 33  ? '#F59E0B'
-    : '#94A3B8';
+    : pct >= 67  ? '#84CC16'
+    : pct >= 40  ? '#F59E0B'
+    : pct >= 1   ? '#F97316'
+    : '#DC2626';
 
-  // §9b: purchase readiness
-  const readiness = _gdPurchaseReadiness(target, savingsAgorot, walletAgorot);
+  // §9b: purchase readiness (uses guarded sAgorot)
+  const readiness = _gdPurchaseReadiness(target, sAgorot, walletAgorot);
 
   const gid = _gdEsc(goal.goalId);
 
@@ -283,7 +296,7 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
               margin-top:4px;width:100%;padding:4px;
               background:#16A34A;color:#fff;border:none;border-radius:8px;
               font-size:0.7rem;font-weight:700;font-family:inherit;cursor:pointer;
-            ">✓ שמור</button>
+            ">✓ שמור מחיר</button>
           </div>
           ${goal.store ? `<div style="font-size:0.68rem;color:#94A3B8;margin-top:1px;
             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
@@ -304,7 +317,7 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
           display:flex;justify-content:space-between;
         ">
           <span style="font-weight:700;color:${barFill};">${pct}%</span>
-          <span>${Currency.formatILS(saved)} מתוך ${Currency.formatILS(target)}</span>
+          <span>${pct > 0 ? `${Currency.formatILS(saved)} מתוך ${Currency.formatILS(target)}` : `מטרה: ${Currency.formatILS(target)}`}</span>
         </div>
       </div>
 
@@ -317,30 +330,30 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
         font-weight:${readiness.caseKey === 'A' ? '700' : '500'};
       ">${readiness.msg}</div>
 
-      <!-- Bottom action row (legible, two rows on small cards) -->
+      <!-- Bottom action row -->
       <div style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;align-items:center;">
         <button class="gd-change-name-btn" type="button"
           data-goal-id="${gid}"
-          style="background:none;border:none;color:#475569;font-size:0.75rem;
-            cursor:pointer;padding:2px 4px;font-family:inherit;">✏️ שם</button>
+          style="background:none;border:none;color:#1E293B;font-size:0.72rem;
+            cursor:pointer;padding:2px 4px;font-family:inherit;font-weight:600;">✏️ שם</button>
         <span style="color:#94A3B8;font-size:0.68rem;line-height:1;">|</span>
         <button class="gd-change-price-btn" type="button"
           data-goal-id="${gid}"
-          style="background:none;border:none;color:#475569;font-size:0.75rem;
-            cursor:pointer;padding:2px 4px;font-family:inherit;">✏️ מחיר</button>
+          style="background:none;border:none;color:#1E293B;font-size:0.72rem;
+            cursor:pointer;padding:2px 4px;font-family:inherit;font-weight:600;">✏️ עדכון מחיר</button>
         <span style="color:#94A3B8;font-size:0.68rem;line-height:1;">|</span>
         <button class="gd-change-icon-btn" type="button"
           data-goal-id="${gid}"
           data-goal-emoji="${_gdEsc(goal.emoji)}"
           data-goal-title="${_gdEsc(goal.title)}"
-          style="background:none;border:none;color:#475569;font-size:0.75rem;
-            cursor:pointer;padding:2px 4px;font-family:inherit;">🎭 סמל</button>
+          style="background:none;border:none;color:#1E293B;font-size:0.72rem;
+            cursor:pointer;padding:2px 4px;font-family:inherit;font-weight:600;">🎭 סמל</button>
         <span style="color:#94A3B8;font-size:0.68rem;line-height:1;">|</span>
         <button disabled type="button" style="
           background:none;border:none;color:#CBD5E1;font-size:0.72rem;
           cursor:not-allowed;padding:2px 4px;font-family:inherit;
         ">📷 <span style="font-size:0.58rem;background:#F1F5F9;color:#94A3B8;
-          padding:1px 3px;border-radius:5px;font-weight:700;">בקרוב</span></button>
+          padding:1px 3px;border-radius:5px;font-weight:700;">תמונה</span></button>
       </div>
     </div>`;
 }
@@ -710,7 +723,7 @@ function _gdLoadingHTML(msg) {
         margin:0 auto 8px;
         animation:ph-spin 0.8s linear infinite;
       "></div>
-      <p style="color:var(--color-text-muted);font-size:0.82rem;margin:0;">${_gdEsc(msg || 'טוען...')}</p>
+      <p style="color:var(--color-text-muted);font-size:0.82rem;margin:0;">טוען<span class="ld-d">.</span><span class="ld-d">.</span><span class="ld-d">.</span></p>
     </div>`;
 }
 

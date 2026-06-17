@@ -488,8 +488,9 @@ function _computeSuggestions(availCounts, priceAgorot) {
     return ALL_DENOMS.map(function(d) { return c[d] || 0; }).join(',');
   }
 
-  // ── Strategy A: many coins — greedy small-first ──────────────
-  var greedySmall = buildGreedy(SMALL_FIRST);
+  // ── Strategy A: many coins — DP small-first (exact) with greedy fallback ─
+  var exactSmall  = findExactDP(SMALL_FIRST);   // tries small denominations first
+  var greedySmall = exactSmall ? null : buildGreedy(SMALL_FIRST); // only needed if DP fails
 
   // ── Strategy B: fewest pieces, coins preferred ───────────────
   //   B1: coin-only exact DP (prefers coins even if more pieces than a bill solution)
@@ -513,8 +514,10 @@ function _computeSuggestions(availCounts, priceAgorot) {
     });
   }
 
-  // Suggestion A: max-coins greedy (small-first)
-  if (greedySmall) {
+  // Suggestion A: max-coins — prefer exact DP, fall back to greedy
+  if (exactSmall) {
+    addCandidate('שימוש בכמה שיותר מטבעות (עדיף)', exactSmall, sumCounts(exactSmall), true);
+  } else if (greedySmall) {
     addCandidate('שימוש בכמה שיותר מטבעות (עדיף)', greedySmall.counts, greedySmall.totalPaid, greedySmall.exact);
   }
 

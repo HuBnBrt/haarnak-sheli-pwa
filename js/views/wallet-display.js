@@ -89,8 +89,8 @@ function _buildReadOnlyHTML(counts, totalAgorot) {
     const bg      = hasVal ? (isCoin ? '#FEF9C3' : '#ECFDF5') : 'var(--color-bg-subtle,#F8FAFC)';
     const border  = hasVal ? (isCoin ? '#D97706' : '#34D399') : 'var(--color-border)';
     const textCol = hasVal ? (isCoin ? '#92400E' : '#065F46') : 'var(--color-text-muted)';
-    // Larger images: coins 62px, bills 56px (closer to coin visual size)
-    const imgH    = isCoin ? 62 : 56;
+    // Larger images: coins 62px, bills 68px (comparable visual height)
+    const imgH    = isCoin ? 62 : 68;
     const imgHTML = _wdDenomImg(agorot, isCoin, imgH);
 
     return `
@@ -102,14 +102,14 @@ function _buildReadOnlyHTML(counts, totalAgorot) {
         opacity:${hasVal ? '1' : '0.38'};min-width:0;
       ">
         <!-- Image: first in HTML = rightmost in RTL row -->
-        <div style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:${imgH}px;">
+        <div style="flex-shrink:0;display:flex;align-items:center;justify-content:center;${isCoin ? `width:${imgH}px;` : 'min-width:0;max-width:140px;'}">
           ${imgHTML || `<span style="font-size:0.9rem;font-weight:800;color:${textCol};">${_wdEsc(d.labelHe)}</span>`}
         </div>
         <!-- Info: second in HTML = leftmost in RTL row -->
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
-          <div style="font-size:0.9rem;font-weight:800;color:${textCol};white-space:nowrap;line-height:1.2;">${_wdEsc(d.labelHe)}</div>
-          <div style="font-weight:900;font-size:1.5rem;color:${textCol};line-height:1.15;">${count}</div>
-          ${hasVal ? `<div style="font-size:0.78rem;font-weight:700;color:${textCol};white-space:nowrap;">= ${Currency.formatILS(subTotal)}</div>` : ''}
+          <div style="font-size:1.0rem;font-weight:900;color:${textCol};white-space:nowrap;line-height:1.2;">${_wdEsc(d.labelHe)}</div>
+          <div style="font-weight:800;font-size:1.25rem;color:${textCol};line-height:1.15;">${count}</div>
+          ${hasVal ? `<div style="font-size:0.85rem;font-weight:700;color:${textCol};white-space:nowrap;">= ${Currency.formatILS(subTotal)}</div>` : ''}
         </div>
       </div>`;
   }
@@ -175,7 +175,7 @@ function _buildReadOnlyHTML(counts, totalAgorot) {
           onmouseup="this.style.transform=''"
           onmouseleave="this.style.transform=''"
           type="button">
-          🛒 קנייה
+          <span style="background:rgba(255,255,255,0.3);border-radius:50%;width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;font-size:0.9rem;">🛒</span> קנייה
         </button>
       </div>
     </div>`;
@@ -265,8 +265,8 @@ async function _renderEditorShell(el, userId, existingCounts) {
     <div style="margin-top: 4px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
         <button id="wd-editor-back" type="button" aria-label="חזרה"
-          style="background:none;border:none;font-size:1.5rem;font-weight:900;cursor:pointer;
-            padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
+          style="background:#F1F5F9;border:1.5px solid #E2E8F0;font-size:1.3rem;font-weight:900;cursor:pointer;
+            padding:4px 10px;border-radius:10px;color:var(--color-text-muted);line-height:1;"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
         <div style="font-size:1.1rem;font-weight:800;color:var(--color-text);">🪙 עדכון תכולת הארנק שלי</div>
       </div>
       ${_wdSpinnerHTML('טוען...')}
@@ -304,8 +304,8 @@ function _renderEditorForm(el, userId, counts) {
     const border = isCoin ? '#D97706' : '#34D399';
     const color  = isCoin ? '#92400E' : '#065F46';
     const icon   = isCoin ? '🪙' : '💵';
-    // Larger images in editor: coins 56px, bills 40px
-    const imgH   = isCoin ? 56 : 40;
+    // Larger images in editor: coins 56px, bills 54px (comparable height)
+    const imgH   = isCoin ? 56 : 54;
     const imgHTML = _wdDenomImg(d.agorot, isCoin, imgH);
 
     return `
@@ -356,8 +356,8 @@ function _renderEditorForm(el, userId, counts) {
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
         <button id="wd-editor-back" type="button" aria-label="חזרה"
-          style="background:none;border:none;font-size:1.5rem;font-weight:900;cursor:pointer;
-            padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
+          style="background:#F1F5F9;border:1.5px solid #E2E8F0;font-size:1.3rem;font-weight:900;cursor:pointer;
+            padding:4px 10px;border-radius:10px;color:var(--color-text-muted);line-height:1;"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
         <div style="font-size:1.1rem;font-weight:800;color:var(--color-text);">🪙 עדכון תכולת הארנק שלי</div>
       </div>
 
@@ -512,7 +512,9 @@ function _wdDenomImg(agorot, isCoin, h) {
   const src = MAP[agorot];
   if (!src) return '';
   const height = h || (isCoin ? 38 : 26);
-  return `<img src="${src}" style="height:${height}px;width:auto;max-width:${height + 12}px;display:block;object-fit:contain;" alt="" draggable="false" loading="lazy">`;
+  // Coins are circular: limit max-width to diameter. Bills are landscape: allow natural width.
+  const maxW = isCoin ? `${height + 4}px` : '160px';
+  return `<img src="${src}" style="height:${height}px;width:auto;max-width:${maxW};display:block;object-fit:contain;" alt="" draggable="false" loading="lazy">`;
 }
 
 /** Animated loading spinner for use in wallet views. */
@@ -533,7 +535,10 @@ function _wdSpinnerHTML(msg) {
 /** Update the outer wallet card section title (shared with purchase-helper). */
 function _wdSetCardTitle(title) {
   const el = document.getElementById('wallet-section-title');
-  if (el) el.textContent = title;
+  if (!el) return;
+  // Reset any inline style changes made by purchase-helper (flex, gap, etc.)
+  el.style.cssText = 'margin-bottom: 6px;';
+  el.textContent   = title;
 }
 
 function _wdEsc(str) {

@@ -62,7 +62,7 @@ async function _phStep0(el, userId, gender, onExit) {
 }
 
 function _phStep0Render(el, userId, gender, onExit, phData) {
-  _phSetCardTitle('מה קונים עכשיו');
+  _phSetCardTitle('מה קונים עכשיו', onExit);
   const { savingsAgorot, walletTotalAgorot, purchasableGoals, goals } = phData;
 
   // prices[goalId] = current price agorot (editable, defaults to targetAgorot)
@@ -110,10 +110,6 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
 
   el.innerHTML = `
     <div style="margin-top:4px;">
-      <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="ביטול"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
-      </div>
-
       <!-- Wallet balance pill -->
       <div style="
         display:inline-flex;align-items:center;gap:6px;
@@ -155,8 +151,7 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
       </div>
     </div>`;
 
-  // ── Back ───────────────────────────────────────────────────
-  document.getElementById('ph-back').addEventListener('click', onExit);
+  // ── Back is handled by #ph-title-back-btn in outer section-title (via _phSetCardTitle)
 
   // ── Custom rows renderer ────────────────────────────────────
   function _renderCustomRows() {
@@ -496,9 +491,9 @@ async function _phStep2(el, userId, gender, onExit, priceAgorot, description, on
 }
 
 function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, walletData, onBack, goalContext) {
-  _phSetCardTitle('בחר תשלום');
-  const { walletCounts, walletTotalAgorot, savingsAgorot, suggestions, canAfford } = walletData;
   const goBack = onBack || (() => _phStep0(el, userId, gender, onExit));
+  _phSetCardTitle('בחר תשלום', goBack);
+  const { walletCounts, walletTotalAgorot, savingsAgorot, suggestions, canAfford } = walletData;
 
   const sel = {};
   Currency.DENOMINATIONS.forEach(d => { sel[d.agorot] = 0; });
@@ -577,10 +572,6 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
 
   el.innerHTML = `
     <div style="margin-top:4px;">
-      <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
-      </div>
-
       <!-- A. Summary -->
       <div style="
         display:flex;justify-content:space-between;align-items:center;
@@ -629,7 +620,7 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
       </button>
     </div>`;
 
-  document.getElementById('ph-back').addEventListener('click', goBack);
+  // Back is handled by #ph-title-back-btn in outer section-title (via _phSetCardTitle)
 
   // Initial accumulator render + status
   _phSyncPayUI(el, sel, walletCounts, priceAgorot, walletTotalAgorot);
@@ -685,8 +676,10 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
 
 function _phStep3(el, userId, gender, onExit, priceAgorot, description,
                   paidCounts, paidTotal, expectedChange, walletData, onBack, goalContext) {
-  _phSetCardTitle('🪙 קיבלת עודף');
   const goBack = onBack || (() => _phStep0(el, userId, gender, onExit));
+  // Step 3 back → re-render Step 2 (reuse cached walletData, no network call)
+  const backToStep2 = () => _phStep2Render(el, userId, gender, onExit, priceAgorot, description, walletData, goBack, goalContext);
+  _phSetCardTitle('🪙 קיבלת עודף', backToStep2);
   const chg    = {};
   Currency.DENOMINATIONS.forEach(d => { chg[d.agorot] = 0; });
 
@@ -718,10 +711,6 @@ function _phStep3(el, userId, gender, onExit, priceAgorot, description,
 
   el.innerHTML = `
     <div style="margin-top:4px;">
-      <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
-      </div>
-
       <div style="
         background:#ECFDF5;border:1.5px solid #34D399;
         border-radius:14px;padding:14px;margin-bottom:16px;text-align:center;
@@ -759,10 +748,7 @@ function _phStep3(el, userId, gender, onExit, priceAgorot, description,
       </button>
     </div>`;
 
-  // Back → step 2 (no re-fetch; reuses cached walletData)
-  document.getElementById('ph-back').addEventListener('click', () =>
-    _phStep2Render(el, userId, gender, onExit, priceAgorot, description,
-      walletData, goBack, goalContext));
+  // Back is in outer title; it calls goBack → _phStep2Render (via onBack passed to _phStep3)
 
   el.querySelectorAll('.phc-plus, .phc-minus').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -798,7 +784,7 @@ function _phStep3(el, userId, gender, onExit, priceAgorot, description,
 
 function _phStep4(el, userId, gender, onExit, priceAgorot, description,
                   paidCounts, changeCounts, changeAgorot, walletData, goalContext) {
-  _phSetCardTitle('✓ אישור קנייה');
+  _phSetCardTitle('✓ אישור קנייה', () => _phStep0(el, userId, gender, onExit));
   const paidTotal  = _phCountsSum(paidCounts);
   const enterLabel = gender === 'f' ? 'הכניסי לארנק האמיתי ✓' : 'הכנס לארנק האמיתי ✓';
 
@@ -831,10 +817,6 @@ function _phStep4(el, userId, gender, onExit, priceAgorot, description,
 
   el.innerHTML = `
     <div style="margin-top:4px;">
-      <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
-      </div>
-
       ${goalSummaryHTML}
 
       <!-- Purchase summary card -->
@@ -894,9 +876,7 @@ function _phStep4(el, userId, gender, onExit, priceAgorot, description,
       ">ביטול</button>
     </div>`;
 
-  // Back → step 0 (simpler than reconstructing step 2 state)
-  document.getElementById('ph-back').addEventListener('click', () =>
-    _phStep0(el, userId, gender, onExit));
+  // Back → step 0 — handled by outer title button (set via _phSetCardTitle above)
   document.getElementById('ph-cancel').addEventListener('click', onExit);
 
   document.getElementById('ph-confirm').addEventListener('click', async () => {
@@ -1209,12 +1189,9 @@ function _phResolveDenomCount(counts, agorot) {
 }
 
 function _phShowLoading(el, title, onBack) {
-  _phSetCardTitle(title);
+  _phSetCardTitle(title, onBack);
   el.innerHTML = `
     <div style="margin-top:4px;">
-      <div style="${_phHeaderStyle()}">
-        <button id="ph-loading-back" type="button" style="${_phBackBtnStyle()}"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
-      </div>
       <div style="text-align:center;padding:28px 0 16px;">
         <div style="
           width:36px;height:36px;border-radius:50%;
@@ -1226,23 +1203,17 @@ function _phShowLoading(el, title, onBack) {
         <p style="color:var(--color-text-muted);font-size:0.88rem;margin:0;">טוען<span class="ld-d">.</span><span class="ld-d">.</span><span class="ld-d">.</span></p>
       </div>
     </div>`;
-  const back = document.getElementById('ph-loading-back');
-  if (back) back.addEventListener('click', onBack);
 }
 
 function _phShowError(el, msg, onBack) {
+  _phSetCardTitle('שגיאה', onBack);
   el.innerHTML = `
     <div style="margin-top:4px;">
-      <div style="${_phHeaderStyle()}">
-        <button id="ph-err-back" type="button" style="${_phBackBtnStyle()}"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
-      </div>
       <div style="
         background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:12px;
         padding:14px;margin-top:8px;color:#DC2626;font-size:0.88rem;line-height:1.5;
       ">שגיאה: ${_phEsc(msg)}</div>
     </div>`;
-  const back = document.getElementById('ph-err-back');
-  if (back) back.addEventListener('click', onBack);
 }
 
 function _phEsc(str) {
@@ -1253,10 +1224,29 @@ function _phEsc(str) {
     .replace(/"/g, '&quot;');
 }
 
-/** Update the outer wallet card section title (mirrors _wdSetCardTitle in wallet-display.js). */
-function _phSetCardTitle(title) {
+/**
+ * Update the outer wallet card section title.
+ * When onBack is provided, injects a back button inline with the title text
+ * so they appear on the same row (satisfies item 4.2).
+ * When onBack is null/omitted, resets the title to plain text mode.
+ */
+function _phSetCardTitle(title, onBack) {
   const el = document.getElementById('wallet-section-title');
-  if (el) el.textContent = title;
+  if (!el) return;
+  if (onBack) {
+    el.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+    el.innerHTML = `
+      <button id="ph-title-back-btn" type="button" style="
+        background:#F1F5F9;border:1.5px solid #E2E8F0;border-radius:8px;
+        padding:3px 9px;cursor:pointer;font-family:inherit;font-size:1.1rem;
+        line-height:1.3;color:var(--color-text-muted);flex-shrink:0;
+      "><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
+      <span>${_phEsc(title)}</span>`;
+    document.getElementById('ph-title-back-btn').addEventListener('click', onBack);
+  } else {
+    el.style.cssText = 'margin-bottom: 6px;';
+    el.textContent = title;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
