@@ -46,7 +46,8 @@ body {
 }
 
 /* ── Loading Spinner ────────────────────────────────────────── */
-@keyframes ph-spin { to { transform: rotate(360deg); } }
+@keyframes ph-spin    { to { transform: rotate(360deg); } }
+@keyframes gd-fade-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* ── Loading Overlay ────────────────────────────────────────── */
 #app-loading {

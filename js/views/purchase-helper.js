@@ -230,8 +230,7 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
   function _wireGoalCards() {
     el.querySelectorAll('.gp-goal-card').forEach(card => {
       card.addEventListener('click', e => {
-        if (e.target.closest('.gpr-card-editor') ||
-            e.target.classList.contains('gpr-card-toggle')) return;
+        if (e.target.classList.contains('gpr-card-toggle')) return;
         if (card.dataset.disabled === 'true') return;
 
         const goalId = card.dataset.goalId;
@@ -253,29 +252,20 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
     el.querySelectorAll('.gpr-card-toggle').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        const gid      = btn.dataset.goalId;
-        const editorEl = document.getElementById(`gpr-card-editor-${gid}`);
-        if (!editorEl) return;
-        const isOpen = editorEl.style.display !== 'none';
-        editorEl.style.display = isOpen ? 'none' : '';
-        if (!isOpen) {
-          const inp = editorEl.querySelector('input');
-          if (inp) { inp.focus(); inp.select(); }
-        }
-      });
-    });
-
-    el.querySelectorAll('.gpr-price-input').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const gid    = inp.dataset.goalId;
-        const agorot = Currency.parseILSInput((inp.value || '').trim());
-        const orig   = purchasableGoals.find(g => g.goalId === gid);
-        prices[gid]  = (agorot && agorot > 0) ? agorot : (orig ? orig.targetAgorot : 0);
-        if (gid in cart) cart[gid] = prices[gid];
-        const dispEl = document.getElementById(`gpr-card-display-${gid}`);
-        if (dispEl) dispEl.textContent = Currency.formatILS(prices[gid]);
-        _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, _custTotal(), walletTotalAgorot);
-        _syncAll();
+        const gid          = btn.dataset.goalId;
+        const currentAgorot = prices[gid] || parseInt(btn.dataset.goalTarget, 10) || 0;
+        _phOpenPriceModal({
+          goalTitle:    btn.dataset.goalTitle || '',
+          currentAgorot,
+          onSave(newAgorot) {
+            prices[gid] = newAgorot;
+            if (gid in cart) cart[gid] = newAgorot;
+            const dispEl = document.getElementById(`gpr-card-display-${gid}`);
+            if (dispEl) dispEl.textContent = Currency.formatILS(newAgorot);
+            _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, _custTotal(), walletTotalAgorot);
+            _syncAll();
+          },
+        });
       });
     });
   }
@@ -413,31 +403,14 @@ function _phGoalCardHTML(goal) {
       <div id="gpr-card-display-${gid}" style="
         font-weight:900;font-size:0.75rem;color:#16A34A;
       ">${Currency.formatILS(goal.targetAgorot)}</div>
-      <button class="gpr-card-toggle" data-goal-id="${gid}" type="button" style="
-        background:none;border:none;color:var(--color-text-muted);
-        font-size:0.58rem;cursor:pointer;padding:1px 2px;font-family:inherit;line-height:1;
-      ">✏️</button>
-      <div id="gpr-card-editor-${gid}" class="gpr-card-editor" style="
-        display:none;width:100%;margin-top:2px;
-      ">
-        <div style="position:relative;">
-          <input class="gpr-price-input" data-goal-id="${gid}"
-            type="number" inputmode="decimal" min="0.01" step="0.01"
-            value="${(goal.targetAgorot / 100).toFixed(2)}"
-            style="
-              width:100%;box-sizing:border-box;
-              padding:4px 4px 4px 18px;
-              font-size:0.72rem;font-weight:800;font-family:inherit;
-              border:1.5px solid var(--color-border);border-radius:7px;
-              background:var(--color-bg);color:var(--color-text);
-              text-align:left;direction:ltr;
-            ">
-          <span style="
-            position:absolute;left:4px;top:50%;transform:translateY(-50%);
-            font-size:0.6rem;font-weight:700;color:var(--color-text-muted);
-          ">₪</span>
-        </div>
-      </div>
+      <button class="gpr-card-toggle" type="button"
+        data-goal-id="${gid}"
+        data-goal-title="${_phEsc(goal.title)}"
+        data-goal-target="${goal.targetAgorot}"
+        style="
+          background:none;border:none;color:var(--color-text-muted);
+          font-size:0.58rem;cursor:pointer;padding:1px 2px;font-family:inherit;line-height:1;
+        ">✏️</button>
     </div>`;
 }
 
@@ -1451,4 +1424,119 @@ function _phTransferBtnStyle(isAdd) {
     color:${isAdd ? '#15803D' : '#DC2626'};
     font-family:inherit;transition:opacity 0.1s;
   `;
+}
+
+// ── Price-edit modal for purchase flow ────────────────────────
+
+/**
+ * Floating modal for editing a goal's price while in the purchase flow.
+ * The price change is in-memory only (not saved to GAS).
+ *
+ * @param {Object} opts
+ * @param {string}   opts.goalTitle      — display name for the header
+ * @param {number}   opts.currentAgorot  — starting value
+ * @param {Function} opts.onSave         — called with (newAgorot) on confirm
+ */
+function _phOpenPriceModal({ goalTitle, currentAgorot, onSave }) {
+  // Remove stale modal if any
+  const prev = document.getElementById('ph-modal-overlay');
+  if (prev) prev.remove();
+
+  const currentVal = currentAgorot > 0 ? (currentAgorot / 100).toFixed(2) : '';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'ph-modal-overlay';
+  overlay.style.cssText = [
+    'position:fixed;inset:0;z-index:9100;',
+    'background:rgba(15,23,42,0.55);',
+    'display:flex;align-items:center;justify-content:center;',
+    'padding:20px;box-sizing:border-box;',
+    'animation:gd-fade-in 0.15s ease;',
+  ].join('');
+
+  overlay.innerHTML = `
+    <div style="
+      background:#FFFFFF;border-radius:20px;
+      padding:22px 20px 18px;
+      width:100%;max-width:340px;
+      box-shadow:0 12px 40px rgba(0,0,0,0.22);
+      direction:rtl;font-family:inherit;
+    ">
+      <div style="
+        font-size:1.0rem;font-weight:800;color:#1E293B;
+        margin-bottom:4px;padding-bottom:10px;
+        border-bottom:1.5px solid #F1F5F9;
+      ">עדכון מחיר המטרה</div>
+      ${goalTitle ? `<div style="
+        font-size:0.8rem;color:#64748B;margin-bottom:14px;margin-top:4px;
+      ">${_phEsc(goalTitle)}</div>` : '<div style="margin-bottom:14px;"></div>'}
+      <div id="ph-modal-body" style="margin-bottom:16px;">
+        <div style="position:relative;">
+          <span style="
+            position:absolute;right:12px;top:50%;transform:translateY(-50%);
+            font-size:1rem;font-weight:700;color:#15803D;pointer-events:none;
+          ">₪</span>
+          <input id="ph-modal-price-inp"
+            type="number" inputmode="decimal" min="0.01" max="99999" step="0.01"
+            value="${_phEsc(currentVal)}" dir="ltr"
+            style="
+              width:100%;box-sizing:border-box;
+              padding:10px 36px 10px 12px;
+              border:2px solid #86EFAC;border-radius:12px;
+              background:#F0FDF4;color:#1E293B;
+              font-size:1.1rem;font-weight:800;font-family:inherit;
+              text-align:left;
+            ">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-direction:row-reverse;">
+        <button id="ph-modal-confirm" type="button" style="
+          flex:1;padding:12px;
+          background:linear-gradient(135deg,#16A34A 0%,#22C55E 100%);
+          color:#fff;border:none;border-radius:12px;
+          font-size:0.95rem;font-weight:800;font-family:inherit;cursor:pointer;
+        ">שמירה</button>
+        <button id="ph-modal-cancel" type="button" style="
+          flex:1;padding:12px;
+          background:#F8FAFC;color:#475569;
+          border:1.5px solid #E2E8F0;border-radius:12px;
+          font-size:0.95rem;font-weight:700;font-family:inherit;cursor:pointer;
+        ">ביטול</button>
+      </div>
+      <div id="ph-modal-status" style="
+        min-height:1.2em;font-size:0.8rem;color:#DC2626;
+        text-align:center;margin-top:8px;
+      "></div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+
+  const inp        = overlay.querySelector('#ph-modal-price-inp');
+  const confirmBtn = overlay.querySelector('#ph-modal-confirm');
+  const statusEl   = overlay.querySelector('#ph-modal-status');
+
+  if (inp) { setTimeout(() => { inp.focus(); inp.select(); }, 50); }
+
+  inp && inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmBtn && confirmBtn.click();
+  });
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  const onEsc = e => { if (e.key === 'Escape') { document.removeEventListener('keydown', onEsc); close(); } };
+  document.addEventListener('keydown', onEsc);
+
+  overlay.querySelector('#ph-modal-cancel').addEventListener('click', close);
+
+  confirmBtn && confirmBtn.addEventListener('click', () => {
+    const agorot = Currency.parseILSInput((inp ? inp.value : '').trim());
+    if (!agorot || agorot <= 0) {
+      if (inp) { inp.style.borderColor = '#FCA5A5'; inp.focus(); }
+      if (statusEl) statusEl.textContent = 'נא להזין מחיר גדול מאפס.';
+      return;
+    }
+    close();
+    if (onSave) onSave(agorot);
+  });
 }

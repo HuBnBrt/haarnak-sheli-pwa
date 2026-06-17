@@ -110,99 +110,24 @@ function _gdRenderList(el, userId, savingsAgorot, walletAgorot, goals) {
   document.getElementById('gd-add-btn')
     .addEventListener('click', () => _gdRenderCreator(el, userId, savingsAgorot, walletAgorot));
 
-  // "שנה סמל" — event delegation
+  // Single delegation for all tile action buttons → modals
   el.addEventListener('click', e => {
-    const btn = e.target.closest('.gd-change-icon-btn');
-    if (!btn) return;
-    _gdRenderChangeIconView(
-      el, userId, savingsAgorot, walletAgorot,
-      btn.dataset.goalId, btn.dataset.goalEmoji, btn.dataset.goalTitle, goals
-    );
-  });
+    const nameBtn  = e.target.closest('.gd-change-name-btn');
+    const priceBtn = e.target.closest('.gd-change-price-btn');
+    const iconBtn  = e.target.closest('.gd-change-icon-btn');
+    const photoBtn = e.target.closest('.gd-change-photo-btn');
 
-  // "✏️ שם" toggle — show/hide inline name editor
-  el.addEventListener('click', e => {
-    const btn = e.target.closest('.gd-change-name-btn');
-    if (!btn) return;
-    const gid = btn.dataset.goalId;
-    const editorEl = document.getElementById(`gd-tile-name-editor-${gid}`);
-    if (!editorEl) return;
-    const isOpen = editorEl.style.display !== 'none';
-    editorEl.style.display = isOpen ? 'none' : '';
-    if (!isOpen) {
-      const inp = editorEl.querySelector('input');
-      if (inp) { inp.focus(); inp.select(); }
-    }
-  });
-
-  // Name save button — update title via API then re-render
-  el.addEventListener('click', async e => {
-    const btn = e.target.closest('.gd-name-save-btn');
-    if (!btn || btn.disabled) return;
-    const gid   = btn.dataset.goalId;
-    const inp   = document.querySelector(`.gd-name-input[data-goal-id="${gid}"]`);
-    if (!inp) return;
-    const title = (inp.value || '').trim();
-    if (!title) { inp.style.borderColor = '#FCA5A5'; inp.focus(); return; }
-    btn.disabled    = true;
-    btn.textContent = 'שומר...';
-    try {
-      await API.callGASWithFallback('updateGoal', { userId, goalId: gid, title });
-      await GoalsDisplay.render(el, userId, savingsAgorot, walletAgorot);
-    } catch (err) {
-      btn.disabled    = false;
-      btn.textContent = '✓ שמור שם';
-      inp.style.borderColor = '#FCA5A5';
-    }
-  });
-
-  // "✏️ מחיר" toggle — show/hide inline price editor
-  el.addEventListener('click', e => {
-    const btn = e.target.closest('.gd-change-price-btn');
-    if (!btn) return;
-    const gid      = btn.dataset.goalId;
-    const editorEl = document.getElementById(`gd-tile-editor-${gid}`);
-    if (!editorEl) return;
-    const isOpen = editorEl.style.display !== 'none';
-    editorEl.style.display = isOpen ? 'none' : '';
-    if (!isOpen) {
-      const inp = editorEl.querySelector('input');
-      if (inp) { inp.focus(); inp.select(); }
-    }
-  });
-
-  // Enter key in price input → trigger save
-  el.addEventListener('keydown', e => {
-    if (e.key !== 'Enter') return;
-    const inp = e.target.closest('.gd-price-input');
-    if (!inp) return;
-    const gid    = inp.dataset.goalId;
-    const saveBtn = el.querySelector(`.gd-price-save-btn[data-goal-id="${gid}"]`);
-    if (saveBtn && !saveBtn.disabled) saveBtn.click();
-  });
-
-  // "✓ שמור מחיר" — save updated price via API then re-render
-  el.addEventListener('click', async e => {
-    const btn = e.target.closest('.gd-price-save-btn');
-    if (!btn || btn.disabled) return;
-    const gid    = btn.dataset.goalId;
-    const inp    = document.querySelector(`.gd-price-input[data-goal-id="${gid}"]`);
-    if (!inp) return;
-    const agorot = Currency.parseILSInput((inp.value || '').trim());
-    if (!agorot || agorot <= 0) {
-      inp.style.borderColor = '#FCA5A5';
-      inp.focus();
-      return;
-    }
-    btn.disabled    = true;
-    btn.textContent = 'שומר...';
-    try {
-      await API.callGASWithFallback('updateGoal', { userId, goalId: gid, targetAgorot: agorot });
-      await GoalsDisplay.render(el, userId, savingsAgorot, walletAgorot);
-    } catch (err) {
-      btn.disabled    = false;
-      btn.textContent = '✓ שמור';
-      inp.style.borderColor = '#FCA5A5';
+    if (nameBtn) {
+      _gdOpenNameModal(el, userId, savingsAgorot, walletAgorot,
+        nameBtn.dataset.goalId, nameBtn.dataset.goalTitle);
+    } else if (priceBtn) {
+      _gdOpenPriceModal(el, userId, savingsAgorot, walletAgorot,
+        priceBtn.dataset.goalId, parseInt(priceBtn.dataset.goalTarget, 10) || 0);
+    } else if (iconBtn) {
+      _gdOpenIconModal(el, userId, savingsAgorot, walletAgorot,
+        iconBtn.dataset.goalId, iconBtn.dataset.goalEmoji, iconBtn.dataset.goalTitle, goals);
+    } else if (photoBtn) {
+      _gdOpenPhotoModal();
     }
   });
 }
@@ -258,47 +183,11 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
             line-height:1.25;
           ">${_gdEsc(goal.title)}</div>
-          <!-- Inline name editor (hidden until toggled) -->
-          <div id="gd-tile-name-editor-${gid}" style="display:none;margin-top:4px;">
-            <input class="gd-name-input" data-goal-id="${gid}" type="text" maxlength="40"
-              value="${_gdEsc(goal.title)}"
-              style="width:100%;box-sizing:border-box;padding:5px 8px;font-size:0.78rem;
-                font-weight:700;font-family:inherit;border:1.5px solid #86EFAC;border-radius:8px;
-                background:#F0FDF4;color:var(--color-text);">
-            <button class="gd-name-save-btn" data-goal-id="${gid}" type="button" style="
-              margin-top:3px;width:100%;padding:3px;
-              background:#16A34A;color:#fff;border:none;border-radius:7px;
-              font-size:0.68rem;font-weight:700;font-family:inherit;cursor:pointer;">✓ שמור שם</button>
-          </div>
-          <div id="gd-tile-price-${gid}"
+<div id="gd-tile-price-${gid}"
             style="font-size:0.72rem;color:#15803D;font-weight:700;margin-top:1px;">
             ${Currency.formatILS(target)}
           </div>
-          <!-- Inline price editor (hidden until toggled) -->
-          <div id="gd-tile-editor-${gid}" style="display:none;margin-top:4px;">
-            <div style="position:relative;">
-              <input class="gd-price-input" data-goal-id="${_gdEsc(goal.goalId)}"
-                type="number" inputmode="decimal" min="0.01" step="0.01"
-                value="${(target / 100).toFixed(2)}"
-                style="
-                  width:100%;box-sizing:border-box;padding:5px 5px 5px 18px;
-                  font-size:0.78rem;font-weight:800;font-family:inherit;
-                  border:1.5px solid #86EFAC;border-radius:8px;
-                  background:#F0FDF4;color:var(--color-text);
-                  text-align:left;direction:ltr;
-                ">
-              <span style="
-                position:absolute;left:5px;top:50%;transform:translateY(-50%);
-                font-size:0.68rem;font-weight:700;color:#15803D;pointer-events:none;
-              ">₪</span>
-            </div>
-            <button class="gd-price-save-btn" data-goal-id="${_gdEsc(goal.goalId)}" type="button" style="
-              margin-top:4px;width:100%;padding:4px;
-              background:#16A34A;color:#fff;border:none;border-radius:8px;
-              font-size:0.7rem;font-weight:700;font-family:inherit;cursor:pointer;
-            ">✓ שמור מחיר</button>
-          </div>
-          ${goal.store ? `<div style="font-size:0.68rem;color:#94A3B8;margin-top:1px;
+${goal.store ? `<div style="font-size:0.68rem;color:#94A3B8;margin-top:1px;
             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
             📍 ${_gdEsc(goal.store)}</div>` : ''}
         </div>
@@ -334,11 +223,13 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
       <div style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;align-items:center;">
         <button class="gd-change-name-btn" type="button"
           data-goal-id="${gid}"
+          data-goal-title="${_gdEsc(goal.title)}"
           style="background:none;border:none;color:#1E293B;font-size:0.72rem;
             cursor:pointer;padding:2px 4px;font-family:inherit;font-weight:600;">✏️ שם</button>
         <span style="color:#94A3B8;font-size:0.68rem;line-height:1;">|</span>
         <button class="gd-change-price-btn" type="button"
           data-goal-id="${gid}"
+          data-goal-target="${target}"
           style="background:none;border:none;color:#1E293B;font-size:0.72rem;
             cursor:pointer;padding:2px 4px;font-family:inherit;font-weight:600;">✏️ עדכון מחיר</button>
         <span style="color:#94A3B8;font-size:0.68rem;line-height:1;">|</span>
@@ -349,11 +240,10 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
           style="background:none;border:none;color:#1E293B;font-size:0.72rem;
             cursor:pointer;padding:2px 4px;font-family:inherit;font-weight:600;">🎭 סמל</button>
         <span style="color:#94A3B8;font-size:0.68rem;line-height:1;">|</span>
-        <button disabled type="button" style="
-          background:none;border:none;color:#CBD5E1;font-size:0.72rem;
-          cursor:not-allowed;padding:2px 4px;font-family:inherit;
-        ">📷 <span style="font-size:0.58rem;background:#F1F5F9;color:#94A3B8;
-          padding:1px 3px;border-radius:5px;font-weight:700;">תמונה</span></button>
+        <button class="gd-change-photo-btn" type="button"
+          data-goal-id="${gid}"
+          style="background:none;border:none;color:#1E293B;font-size:0.72rem;
+            cursor:pointer;padding:2px 4px;font-family:inherit;font-weight:600;">📷 תמונה</button>
       </div>
     </div>`;
 }
@@ -593,52 +483,6 @@ function _gdRenderCreator(el, userId, savingsAgorot, walletAgorot) {
   });
 }
 
-// ── Change icon view ──────────────────────────────────────────
-
-function _gdRenderChangeIconView(el, userId, savingsAgorot, walletAgorot, goalId, currentEmoji, goalTitle, goals) {
-  let saving = false;
-
-  el.innerHTML = `
-    <div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <button id="gd-change-back" type="button" style="
-          background:none;border:none;font-size:1.4rem;cursor:pointer;
-          padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;
-          font-family:inherit;
-        " aria-label="חזרה"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
-        <div style="font-size:1.0rem;font-weight:800;color:#15803D;">🔄 שנה סמל</div>
-      </div>
-      <p style="font-size:0.82rem;color:#4B7A58;margin:0 0 12px;padding-right:46px;">
-        ${_gdEsc(goalTitle)} — בחר סמל חדש
-      </p>
-      <div id="gd-change-icon-picker"></div>
-      <div id="gd-change-status" style="min-height:1.3em;font-size:0.85rem;text-align:center;margin-top:8px;color:var(--color-danger);"></div>
-    </div>`;
-
-  document.getElementById('gd-change-back')
-    .addEventListener('click', () => _gdRenderList(el, userId, savingsAgorot, walletAgorot, goals));
-
-  _gdRenderIconPicker(
-    document.getElementById('gd-change-icon-picker'),
-    currentEmoji,
-    async (emoji) => {
-      if (saving) return;
-      saving = true;
-
-      const statusEl = document.getElementById('gd-change-status');
-      if (statusEl) { statusEl.style.color = 'var(--color-text-muted)'; statusEl.textContent = 'שומר...'; }
-
-      try {
-        await API.callGASWithFallback('updateGoal', { userId, goalId, emoji });
-        await GoalsDisplay.render(el, userId, savingsAgorot, walletAgorot);
-      } catch (err) {
-        saving = false;
-        if (statusEl) { statusEl.style.color = 'var(--color-danger)'; statusEl.textContent = 'שגיאה: ' + _gdEsc(err.message); }
-      }
-    }
-  );
-}
-
 // ── Shared icon picker ────────────────────────────────────────
 
 /**
@@ -733,4 +577,231 @@ function _gdEsc(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// ── Floating modal system ─────────────────────────────────────
+
+/**
+ * Create and show a floating modal.
+ *
+ * @param {Object} opts
+ * @param {string}   opts.title
+ * @param {string}   opts.bodyHTML    — static HTML rendered inside #gd-modal-body
+ * @param {Function} [opts.onMount]   — called(bodyEl) after overlay is in the DOM
+ * @param {string}   [opts.confirm]   — confirm button label (default 'שמירה')
+ * @param {string}   [opts.cancel]    — cancel button label (default 'ביטול')
+ * @param {boolean}  [opts.cancelOnly] — show only the cancel button (for info dialogs)
+ * @param {Function} opts.onConfirm   — called(overlay, close) when user clicks confirm
+ * @returns {HTMLElement} overlay element
+ */
+function _gdModal({ title, bodyHTML, onMount, confirm = 'שמירה', cancel = 'ביטול', cancelOnly = false, onConfirm }) {
+  // Remove any stale modal
+  const prev = document.getElementById('gd-modal-overlay');
+  if (prev) prev.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'gd-modal-overlay';
+  overlay.style.cssText = [
+    'position:fixed;inset:0;z-index:9000;',
+    'background:rgba(15,23,42,0.55);',
+    'display:flex;align-items:center;justify-content:center;',
+    'padding:20px;box-sizing:border-box;',
+    'animation:gd-fade-in 0.15s ease;',
+  ].join('');
+
+  overlay.innerHTML = `
+    <div style="
+      background:#FFFFFF;border-radius:20px;
+      padding:22px 20px 18px;
+      width:100%;max-width:360px;
+      max-height:80vh;overflow-y:auto;
+      box-shadow:0 12px 40px rgba(0,0,0,0.22);
+      direction:rtl;font-family:inherit;
+    ">
+      <div style="
+        font-size:1.0rem;font-weight:800;color:#1E293B;
+        margin-bottom:16px;padding-bottom:10px;
+        border-bottom:1.5px solid #F1F5F9;
+      ">${_gdEsc(title)}</div>
+      <div id="gd-modal-body" style="margin-bottom:16px;">${bodyHTML || ''}</div>
+      <div style="display:flex;gap:8px;flex-direction:row-reverse;">
+        ${cancelOnly ? '' : `
+          <button id="gd-modal-confirm" type="button" style="
+            flex:1;padding:12px;
+            background:linear-gradient(135deg,#16A34A 0%,#22C55E 100%);
+            color:#fff;border:none;border-radius:12px;
+            font-size:0.95rem;font-weight:800;font-family:inherit;cursor:pointer;
+          ">${_gdEsc(confirm)}</button>
+        `}
+        <button id="gd-modal-cancel" type="button" style="
+          flex:1;padding:12px;
+          background:#F8FAFC;color:#475569;
+          border:1.5px solid #E2E8F0;border-radius:12px;
+          font-size:0.95rem;font-weight:700;font-family:inherit;cursor:pointer;
+        ">${_gdEsc(cancelOnly ? 'הבנתי' : cancel)}</button>
+      </div>
+      <div id="gd-modal-status" style="
+        min-height:1.2em;font-size:0.8rem;color:#DC2626;
+        text-align:center;margin-top:8px;
+      "></div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  const close = () => overlay.remove();
+
+  // Backdrop click → close
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+  // Escape → close
+  const onEsc = e => { if (e.key === 'Escape') { document.removeEventListener('keydown', onEsc); close(); } };
+  document.addEventListener('keydown', onEsc);
+
+  document.getElementById('gd-modal-cancel').addEventListener('click', close);
+
+  if (!cancelOnly) {
+    document.getElementById('gd-modal-confirm').addEventListener('click', () => {
+      if (onConfirm) onConfirm(overlay, close);
+    });
+  }
+
+  if (onMount) {
+    onMount(overlay.querySelector('#gd-modal-body'));
+  }
+
+  return overlay;
+}
+
+// ── Modal openers ─────────────────────────────────────────────
+
+function _gdOpenNameModal(el, userId, savingsAgorot, walletAgorot, goalId, currentTitle) {
+  _gdModal({
+    title: 'עדכון שם המטרה',
+    bodyHTML: `
+      <input id="gd-modal-name-inp" type="text" maxlength="40"
+        value="${_gdEsc(currentTitle || '')}" dir="rtl"
+        style="
+          width:100%;box-sizing:border-box;padding:10px 12px;
+          border:2px solid #86EFAC;border-radius:12px;
+          background:#F0FDF4;color:#1E293B;
+          font-size:1rem;font-weight:700;font-family:inherit;
+        ">`,
+    onMount: bodyEl => {
+      const inp = bodyEl.querySelector('#gd-modal-name-inp');
+      if (inp) { inp.focus(); inp.select(); }
+      // Enter key → confirm
+      inp && inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('gd-modal-confirm')?.click();
+      });
+    },
+    onConfirm: async (overlay, close) => {
+      const inp     = overlay.querySelector('#gd-modal-name-inp');
+      const title   = (inp ? inp.value : '').trim();
+      const statusEl = overlay.querySelector('#gd-modal-status');
+      const confirmBtn = overlay.querySelector('#gd-modal-confirm');
+      if (!title) {
+        if (inp) { inp.style.borderColor = '#FCA5A5'; inp.focus(); }
+        return;
+      }
+      if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'שומר...'; }
+      try {
+        await API.callGASWithFallback('updateGoal', { userId, goalId, title });
+        close();
+        await GoalsDisplay.render(el, userId, savingsAgorot, walletAgorot);
+      } catch (err) {
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'שמירה'; }
+        if (statusEl)   statusEl.textContent = 'שגיאה: ' + _gdEsc(err.message);
+      }
+    },
+  });
+}
+
+function _gdOpenPriceModal(el, userId, savingsAgorot, walletAgorot, goalId, currentAgorot) {
+  const currentVal = currentAgorot > 0 ? (currentAgorot / 100).toFixed(2) : '';
+  _gdModal({
+    title: 'עדכון מחיר המטרה',
+    bodyHTML: `
+      <div style="position:relative;">
+        <span style="
+          position:absolute;right:12px;top:50%;transform:translateY(-50%);
+          font-size:1rem;font-weight:700;color:#15803D;pointer-events:none;
+        ">₪</span>
+        <input id="gd-modal-price-inp"
+          type="number" inputmode="decimal" min="0.01" max="99999" step="0.01"
+          value="${_gdEsc(currentVal)}" dir="ltr"
+          style="
+            width:100%;box-sizing:border-box;
+            padding:10px 36px 10px 12px;
+            border:2px solid #86EFAC;border-radius:12px;
+            background:#F0FDF4;color:#1E293B;
+            font-size:1.1rem;font-weight:800;font-family:inherit;
+            text-align:left;
+          ">
+      </div>`,
+    onMount: bodyEl => {
+      const inp = bodyEl.querySelector('#gd-modal-price-inp');
+      if (inp) { inp.focus(); inp.select(); }
+      inp && inp.addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('gd-modal-confirm')?.click();
+      });
+    },
+    onConfirm: async (overlay, close) => {
+      const inp      = overlay.querySelector('#gd-modal-price-inp');
+      const agorot   = Currency.parseILSInput((inp ? inp.value : '').trim());
+      const statusEl = overlay.querySelector('#gd-modal-status');
+      const confirmBtn = overlay.querySelector('#gd-modal-confirm');
+      if (!agorot || agorot <= 0) {
+        if (inp) { inp.style.borderColor = '#FCA5A5'; inp.focus(); }
+        return;
+      }
+      if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'שומר...'; }
+      try {
+        await API.callGASWithFallback('updateGoal', { userId, goalId, targetAgorot: agorot });
+        close();
+        await GoalsDisplay.render(el, userId, savingsAgorot, walletAgorot);
+      } catch (err) {
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'שמירה'; }
+        if (statusEl)   statusEl.textContent = 'שגיאה: ' + _gdEsc(err.message);
+      }
+    },
+  });
+}
+
+function _gdOpenIconModal(el, userId, savingsAgorot, walletAgorot, goalId, currentEmoji, goalTitle, goals) {
+  let selectedEmoji = currentEmoji || '🎯';
+
+  _gdModal({
+    title: 'בחירת סמל למטרה',
+    bodyHTML: `<div id="gd-modal-icon-picker"></div>`,
+    onMount: bodyEl => {
+      _gdRenderIconPicker(
+        bodyEl.querySelector('#gd-modal-icon-picker'),
+        selectedEmoji,
+        emoji => { selectedEmoji = emoji; }
+      );
+    },
+    onConfirm: async (overlay, close) => {
+      const statusEl   = overlay.querySelector('#gd-modal-status');
+      const confirmBtn = overlay.querySelector('#gd-modal-confirm');
+      if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'שומר...'; }
+      try {
+        await API.callGASWithFallback('updateGoal', { userId, goalId, emoji: selectedEmoji });
+        close();
+        await GoalsDisplay.render(el, userId, savingsAgorot, walletAgorot);
+      } catch (err) {
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'שמירה'; }
+        if (statusEl)   statusEl.textContent = 'שגיאה: ' + _gdEsc(err.message);
+      }
+    },
+  });
+}
+
+function _gdOpenPhotoModal() {
+  _gdModal({
+    title: 'תמונה למטרה',
+    bodyHTML: `<p style="
+      font-size:0.9rem;color:#475569;line-height:1.6;margin:0;text-align:center;
+    ">אפשרות הוספת תמונה עדיין בפיתוח</p>`,
+    cancelOnly: true,
+    onConfirm: null,
+  });
 }
