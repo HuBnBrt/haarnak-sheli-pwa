@@ -374,14 +374,17 @@ function recordPurchase(payload) {
 }
 
 /**
- * Compute 1-2 payment suggestions for a given price from available wallet.
+ * Compute 1-2 payment suggestions for a purchase price.
  *
- * Strategy A (coin-first): greedy from smallest denominations up — prefers
- *   using small coins/change to "clean out" the wallet.
- * Strategy B (large-first): standard greedy from largest — minimises piece count.
+ * Strategy A — "הרבה מטבעות" (many coins):
+ *   Greedy small-first (coins before bills, small before large).
+ *   Maximises the number of individual pieces/coins used.
  *
- * Returns at most 2 suggestions; deduplicates identical results.
- * If the wallet can pay exactly, suggestions are exact; otherwise rounds up.
+ * Strategy B — "הכי מעט פריטים" (fewest pieces, coins preferred):
+ *   Try coin-only DP exact first (prefer coins even if more pieces than a bill solution).
+ *   If no coin-only exact exists → large-first greedy (fewest pieces, may include bills).
+ *
+ * Returns at most 2 deduplicated suggestions.
  *
  * @private
  */
@@ -477,16 +480,22 @@ function _computeSuggestions(availCounts, priceAgorot) {
     return { counts: clean, totalPaid: total, exact: false };
   }
 
+  function sumCounts(c) {
+    return ALL_DENOMS.reduce(function(s, d) { return s + (c[d] || 0) * d; }, 0);
+  }
+
   function countsKey(c) {
     return ALL_DENOMS.map(function(d) { return c[d] || 0; }).join(',');
   }
 
-  // Strategy A: exact coin-only payment (ideal — avoids unnecessary bills)
-  var dpCoins = findExactDP(COINS_ONLY);
-  // Strategy B: exact small-first payment (uses all denoms, still prefers coins)
-  var dpSmall = dpCoins ? null : findExactDP(SMALL_FIRST);
-  // Strategy C: large-first greedy (fewest pieces; may overpay)
-  var greedyLarge = buildGreedy(ALL_DENOMS);
+  // ── Strategy A: many coins — greedy small-first ──────────────
+  var greedySmall = buildGreedy(SMALL_FIRST);
+
+  // ── Strategy B: fewest pieces, coins preferred ───────────────
+  //   B1: coin-only exact DP (prefers coins even if more pieces than a bill solution)
+  var coinOnlyDP  = findExactDP(COINS_ONLY);
+  //   B2 fallback: large-first greedy (fewest pieces, may include bills)
+  var greedyLarge = coinOnlyDP ? null : buildGreedy(ALL_DENOMS);
 
   var seen    = {};
   var results = [];
@@ -504,22 +513,19 @@ function _computeSuggestions(availCounts, priceAgorot) {
     });
   }
 
-  // Preferred: coin-only exact
-  if (dpCoins) {
-    var t = ALL_DENOMS.reduce(function(s, d) { return s + (dpCoins[d] || 0) * d; }, 0);
-    addCandidate('תשלום מדויק במטבעות', dpCoins, t, true);
+  // Suggestion A: many coins (small-first greedy)
+  if (greedySmall) {
+    var labelA = greedySmall.exact ? 'תשלום מדויק במטבעות קטנות' : 'הרבה מטבעות קטנות';
+    addCandidate(labelA, greedySmall.counts, greedySmall.totalPaid, greedySmall.exact);
   }
-  // Fallback exact: small-first (may include a bill)
-  if (dpSmall) {
-    var t2 = ALL_DENOMS.reduce(function(s, d) { return s + (dpSmall[d] || 0) * d; }, 0);
-    addCandidate('תשלום מדויק', dpSmall, t2, true);
-  }
-  // Fewest-pieces greedy
-  if (greedyLarge) {
-    addCandidate(
-      greedyLarge.exact ? 'הכי מעט מטבעות ושטרות' : 'תשלום עם עודף מינימלי',
-      greedyLarge.counts, greedyLarge.totalPaid, greedyLarge.exact
-    );
+
+  // Suggestion B: fewest pieces (coins preferred)
+  if (coinOnlyDP) {
+    var tB = sumCounts(coinOnlyDP);
+    addCandidate('מטבעות בלבד (מדויק)', coinOnlyDP, tB, true);
+  } else if (greedyLarge) {
+    var labelB = greedyLarge.exact ? 'הכי מעט פריטים' : 'תשלום עם עודף מינימלי';
+    addCandidate(labelB, greedyLarge.counts, greedyLarge.totalPaid, greedyLarge.exact);
   }
 
   return results.slice(0, 2);

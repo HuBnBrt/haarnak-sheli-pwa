@@ -119,6 +119,46 @@ function _gdRenderList(el, userId, savingsAgorot, walletAgorot, goals) {
       btn.dataset.goalId, btn.dataset.goalEmoji, btn.dataset.goalTitle, goals
     );
   });
+
+  // "✏️ מחיר" toggle — show/hide inline price editor
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('.gd-change-price-btn');
+    if (!btn) return;
+    const gid      = btn.dataset.goalId;
+    const editorEl = document.getElementById(`gd-tile-editor-${gid}`);
+    if (!editorEl) return;
+    const isOpen = editorEl.style.display !== 'none';
+    editorEl.style.display = isOpen ? 'none' : '';
+    if (!isOpen) {
+      const inp = editorEl.querySelector('input');
+      if (inp) { inp.focus(); inp.select(); }
+    }
+  });
+
+  // "✓ שמור" — save updated price via API then re-render
+  el.addEventListener('click', async e => {
+    const btn = e.target.closest('.gd-price-save-btn');
+    if (!btn || btn.disabled) return;
+    const gid    = btn.dataset.goalId;
+    const inp    = document.querySelector(`.gd-price-input[data-goal-id="${gid}"]`);
+    if (!inp) return;
+    const agorot = Currency.parseILSInput((inp.value || '').trim());
+    if (!agorot || agorot <= 0) {
+      inp.style.borderColor = '#FCA5A5';
+      inp.focus();
+      return;
+    }
+    btn.disabled    = true;
+    btn.textContent = 'שומר...';
+    try {
+      await API.callGASWithFallback('updateGoal', { userId, goalId: gid, targetAgorot: agorot });
+      await GoalsDisplay.render(el, userId, savingsAgorot, walletAgorot);
+    } catch (err) {
+      btn.disabled    = false;
+      btn.textContent = '✓ שמור';
+      inp.style.borderColor = '#FCA5A5';
+    }
+  });
 }
 
 // ── Goal tile (compact, 2-per-row) ───────────────────────────
@@ -167,8 +207,33 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
             line-height:1.25;
           ">${_gdEsc(goal.title)}</div>
-          <div style="font-size:0.72rem;color:#15803D;font-weight:700;margin-top:1px;">
+          <div id="gd-tile-price-${_gdEsc(goal.goalId)}"
+            style="font-size:0.72rem;color:#15803D;font-weight:700;margin-top:1px;">
             ${Currency.formatILS(target)}
+          </div>
+          <!-- Inline price editor (hidden until toggled) -->
+          <div id="gd-tile-editor-${_gdEsc(goal.goalId)}" style="display:none;margin-top:4px;">
+            <div style="position:relative;">
+              <input class="gd-price-input" data-goal-id="${_gdEsc(goal.goalId)}"
+                type="number" inputmode="decimal" min="0.01" step="0.01"
+                value="${(target / 100).toFixed(2)}"
+                style="
+                  width:100%;box-sizing:border-box;padding:5px 5px 5px 18px;
+                  font-size:0.78rem;font-weight:800;font-family:inherit;
+                  border:1.5px solid #86EFAC;border-radius:8px;
+                  background:#F0FDF4;color:var(--color-text);
+                  text-align:left;direction:ltr;
+                ">
+              <span style="
+                position:absolute;left:5px;top:50%;transform:translateY(-50%);
+                font-size:0.68rem;font-weight:700;color:#15803D;pointer-events:none;
+              ">₪</span>
+            </div>
+            <button class="gd-price-save-btn" data-goal-id="${_gdEsc(goal.goalId)}" type="button" style="
+              margin-top:4px;width:100%;padding:4px;
+              background:#16A34A;color:#fff;border:none;border-radius:8px;
+              font-size:0.7rem;font-weight:700;font-family:inherit;cursor:pointer;
+            ">✓ שמור</button>
           </div>
           ${goal.store ? `<div style="font-size:0.68rem;color:#94A3B8;margin-top:1px;
             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
@@ -202,15 +267,26 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
         font-weight:${readiness.caseKey === 'A' ? '700' : '500'};
       ">${readiness.msg}</div>
 
-      <!-- "שנה סמל" link -->
-      <div style="text-align:center;">
+      <!-- Bottom action links: "✏️ מחיר" | "שנה סמל" -->
+      <div style="display:flex;gap:4px;justify-content:center;align-items:center;">
+        <button class="gd-change-price-btn" type="button"
+          data-goal-id="${_gdEsc(goal.goalId)}"
+          style="
+            background:none;border:none;
+            color:#CBD5E1;font-size:0.65rem;
+            cursor:pointer;padding:2px 4px;
+            font-family:inherit;text-decoration:underline;
+            text-underline-offset:2px;
+          "
+        >✏️ מחיר</button>
+        <span style="color:#CBD5E1;font-size:0.6rem;line-height:1;">|</span>
         <button class="gd-change-icon-btn" type="button"
           data-goal-id="${_gdEsc(goal.goalId)}"
           data-goal-emoji="${_gdEsc(goal.emoji)}"
           data-goal-title="${_gdEsc(goal.title)}"
           style="
             background:none;border:none;
-            color:#CBD5E1;font-size:0.68rem;
+            color:#CBD5E1;font-size:0.65rem;
             cursor:pointer;padding:2px 4px;
             font-family:inherit;text-decoration:underline;
             text-underline-offset:2px;
@@ -576,7 +652,17 @@ function _gdRenderIconPicker(containerEl, currentEmoji, onSelect) {
 // ── Helpers ───────────────────────────────────────────────────
 
 function _gdLoadingHTML(msg) {
-  return `<p style="color:var(--color-text-muted);font-size:0.85rem;margin:4px 0 0;">${_gdEsc(msg || 'טוען...')}</p>`;
+  return `
+    <div style="text-align:center;padding:22px 0 12px;">
+      <div style="
+        width:32px;height:32px;border-radius:50%;
+        border:3px solid var(--color-border,#E2E8F0);
+        border-top-color:var(--color-primary,#0EA5E9);
+        margin:0 auto 8px;
+        animation:ph-spin 0.8s linear infinite;
+      "></div>
+      <p style="color:var(--color-text-muted);font-size:0.82rem;margin:0;">${_gdEsc(msg || 'טוען...')}</p>
+    </div>`;
 }
 
 function _gdEsc(str) {

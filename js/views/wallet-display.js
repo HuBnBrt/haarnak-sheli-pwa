@@ -28,10 +28,7 @@ window.WalletDisplay = {
    * @param {string}      userId — child's user ID
    */
   async renderReadOnly(el, userId) {
-    el.innerHTML = `
-      <p style="color: var(--color-text-muted); font-size: 0.88rem; margin: 6px 0 0;">
-        ${_wdEsc(window.I18n ? I18n.t('common.loading') : 'טוען...')}
-      </p>`;
+    el.innerHTML = _wdSpinnerHTML('טוען ארנק...');
 
     try {
       const { data } = await API.callGASWithFallback('getWalletDenominations', { userId });
@@ -68,14 +65,11 @@ window.WalletDisplay = {
 // ── Read-only display ─────────────────────────────────────────
 
 function _buildReadOnlyHTML(counts, totalAgorot) {
-  // Child wallet denominations displayed in a 4-column CSS grid, ascending (small→large).
-  // Row 1: 10ag, 50ag, 1₪, 2₪  (all coins)
-  // Row 2: 5₪, 10₪ (1 col each) + 20₪ bill (span 2)
-  // Large bills (50₪, 100₪, 200₪): flex row below if present
-  const CHILD_COINS_R1 = [10, 50, 100, 200];
-  const CHILD_COINS_R2 = [500, 1000];
-  const BILL_MAIN      = 2000;
-  const LARGE_BILLS    = [5000, 10000, 20000];
+  // 2-column grid layout; each card is a RTL row: image (right) + info (left).
+  // Child denominations (7): 10ag, 50ag, 1₪, 2₪, 5₪, 10₪, 20₪ — all shown, dimmed at zero.
+  // Large bills (50₪, 100₪, 200₪): full-width cards, only shown if present.
+  const CHILD_DENOMS = [10, 50, 100, 200, 500, 1000, 2000]; // ascending
+  const LARGE_BILLS  = [5000, 10000, 20000];
 
   const isEmpty = totalAgorot === 0;
 
@@ -83,61 +77,55 @@ function _buildReadOnlyHTML(counts, totalAgorot) {
     return Currency.DENOMINATIONS.find(d => d.agorot === agorot);
   }
 
-  function denomCellHTML(agorot, isCoin, span) {
+  // Each card: RTL row — image sits RIGHT (first in HTML), info sits LEFT (second in HTML).
+  function denomCardHTML(agorot, isCoin, fullWidth) {
     const d = getD(agorot);
     if (!d) return '';
     const count    = _getCount(counts, agorot);
     const subTotal = count * agorot;
-    const imgHTML  = _wdDenomImg(agorot, isCoin);
     const hasVal   = count > 0;
 
     const bg      = hasVal ? (isCoin ? '#FEF9C3' : '#ECFDF5') : 'var(--color-bg-subtle,#F8FAFC)';
     const border  = hasVal ? (isCoin ? '#D97706' : '#34D399') : 'var(--color-border)';
     const textCol = hasVal ? (isCoin ? '#92400E' : '#065F46') : 'var(--color-text-muted)';
+    // Larger images: coins 62px, bills 46px
+    const imgH    = isCoin ? 62 : 46;
+    const imgHTML = _wdDenomImg(agorot, isCoin, imgH);
 
     return `
       <div style="
-        ${span > 1 ? `grid-column: span ${span};` : ''}
-        padding: 8px 4px 6px;
-        display: flex; flex-direction: column; align-items: center; gap: 3px;
-        border-radius: 10px;
-        background: ${bg}; border: 1.5px solid ${border};
-        opacity: ${hasVal ? '1' : '0.38'};
-        min-width: 0;
+        ${fullWidth ? 'grid-column:span 2;' : ''}
+        display:flex;flex-direction:row;align-items:center;gap:10px;
+        padding:10px 12px;border-radius:14px;
+        background:${bg};border:1.5px solid ${border};
+        opacity:${hasVal ? '1' : '0.38'};min-width:0;
       ">
-        <div style="height: ${isCoin ? 46 : 32}px; display: flex; align-items: center; justify-content: center; width: 100%;">
-          ${imgHTML || `<span style="font-size:0.75rem;font-weight:700;color:${textCol};">${_wdEsc(d.labelHe)}</span>`}
+        <!-- Image: first in HTML = rightmost in RTL row -->
+        <div style="flex-shrink:0;display:flex;align-items:center;justify-content:center;width:${imgH}px;">
+          ${imgHTML || `<span style="font-size:0.9rem;font-weight:800;color:${textCol};">${_wdEsc(d.labelHe)}</span>`}
         </div>
-        <div style="font-weight:900;font-size:1.5rem;color:${textCol};line-height:1;">${count}</div>
-        <div style="font-size:0.64rem;font-weight:700;color:${textCol};white-space:nowrap;text-align:center;">${_wdEsc(d.labelHe)}</div>
-        ${hasVal ? `<div style="font-size:0.58rem;color:${textCol};opacity:0.72;white-space:nowrap;text-align:center;">= ${Currency.formatILS(subTotal)}</div>` : ''}
+        <!-- Info: second in HTML = leftmost in RTL row -->
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+          <div style="font-weight:900;font-size:2rem;color:${textCol};line-height:1;">${count}</div>
+          <div style="font-size:0.72rem;font-weight:700;color:${textCol};white-space:nowrap;">${_wdEsc(d.labelHe)}</div>
+          ${hasVal ? `<div style="font-size:0.62rem;color:${textCol};opacity:0.72;white-space:nowrap;">= ${Currency.formatILS(subTotal)}</div>` : ''}
+        </div>
       </div>`;
   }
 
   const presentLargeBills = LARGE_BILLS.filter(a => _getCount(counts, a) > 0);
-  const largeBillsHTML = presentLargeBills.length > 0 ? `
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;direction:rtl;">
-      ${presentLargeBills.map(a => {
-        const d = getD(a);
-        const n = _getCount(counts, a);
-        return `
-          <div style="display:inline-flex;flex-direction:column;align-items:center;gap:3px;
-            padding:8px 12px;border-radius:10px;background:#ECFDF5;border:1.5px solid #34D399;">
-            <div style="height:28px;display:flex;align-items:center;">${_wdDenomImg(a, false)}</div>
-            <div style="font-weight:900;font-size:1.3rem;color:#065F46;">${n}</div>
-            <div style="font-size:0.68rem;font-weight:700;color:#065F46;">${_wdEsc(d.labelHe)}</div>
-            <div style="font-size:0.62rem;color:#065F46;opacity:0.7;">= ${Currency.formatILS(n * a)}</div>
-          </div>`;
-      }).join('')}
-    </div>` : '';
 
   const denomGridHTML = `
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px;">
-      ${CHILD_COINS_R1.map(a => denomCellHTML(a, true, 1)).join('')}
-      ${CHILD_COINS_R2.map(a => denomCellHTML(a, true, 1)).join('')}
-      ${denomCellHTML(BILL_MAIN, false, 2)}
-    </div>
-    ${largeBillsHTML}`;
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px;">
+      ${CHILD_DENOMS.map((a, i) => {
+        const isCoin = a <= 1000; // 10ag through 10₪ are coins; 20₪ is a bill
+        // 20₪ (last) spans full width when there's an odd count
+        const isLast = i === CHILD_DENOMS.length - 1;
+        const span   = isLast && (CHILD_DENOMS.length % 2 === 1);
+        return denomCardHTML(a, isCoin, span);
+      }).join('')}
+      ${presentLargeBills.map(a => denomCardHTML(a, false, true)).join('')}
+    </div>`;
 
   return `
     <div style="margin-top: 4px;">
@@ -273,34 +261,13 @@ async function _renderEditorShell(el, userId, existingCounts) {
   // Show loading shell while we fetch current counts (if not passed in)
   el.innerHTML = `
     <div style="margin-top: 4px;">
-      <div style="
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 16px;
-      ">
-        <button
-          id="wd-editor-back"
-          style="
-            background: none;
-            border: none;
-            font-size: 1.4rem;
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 10px;
-            color: var(--color-text-muted);
-            line-height: 1;
-          "
-          type="button"
-          aria-label="חזרה"
-        >←</button>
-        <div style="font-size: 1.1rem; font-weight: 800; color: var(--color-text);">
-          🪙 עדכון תכולת הארנק שלי
-        </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+        <button id="wd-editor-back" type="button" aria-label="חזרה"
+          style="background:none;border:none;font-size:1.5rem;font-weight:900;cursor:pointer;
+            padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;">→</button>
+        <div style="font-size:1.1rem;font-weight:800;color:var(--color-text);">🪙 עדכון תכולת הארנק שלי</div>
       </div>
-      <p style="color: var(--color-text-muted); font-size: 0.88rem; text-align: center; padding: 20px 0;">
-        טוען...
-      </p>
+      ${_wdSpinnerHTML('טוען...')}
     </div>`;
 
   document.getElementById('wd-editor-back')
@@ -324,260 +291,106 @@ async function _renderEditorShell(el, userId, existingCounts) {
 }
 
 function _renderEditorForm(el, userId, counts) {
-  const coins = Currency.DENOMINATIONS.filter(d => d.type === 'coin');
-  const bills = Currency.DENOMINATIONS.filter(d => d.type === 'bill');
+  // 2-column visual grid. Each card: large image (top), label, then compact stepper.
+  // Child denominations + bills all in one unified grid (ascending).
+  const ALL_DENOMS_ASC = Currency.DENOMINATIONS.slice().reverse(); // 10ag → 200₪
 
-  // Coins: small→large (ascending), so the child sees 10אג׳ first, then 50, 1₪, etc.
-  // Bills: small→large (ascending), 20₪ first, then 50₪, 100₪, 200₪.
-  const coinsAsc = coins.slice().reverse();
-  const billsAsc = bills.slice().reverse();
-
-  function _denomRow(d, isCoin) {
+  function _denomCard(d) {
+    const isCoin = d.type === 'coin';
     const count  = _getCount(counts, d.agorot);
     const bg     = isCoin ? '#FEF9C3' : '#ECFDF5';
     const border = isCoin ? '#D97706' : '#34D399';
     const color  = isCoin ? '#92400E' : '#065F46';
     const icon   = isCoin ? '🪙' : '💵';
+    // Larger images in editor: coins 56px, bills 40px
+    const imgH   = isCoin ? 56 : 40;
+    const imgHTML = _wdDenomImg(d.agorot, isCoin, imgH);
 
     return `
       <div style="
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 10px 0;
-        border-bottom: 1px solid var(--color-border);
-        gap: 12px;
+        background:${bg};border:1.5px solid ${border};border-radius:14px;
+        padding:10px 6px 8px;display:flex;flex-direction:column;
+        align-items:center;gap:6px;
       ">
-        <!-- Denomination visual + label -->
-        <div style="
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          min-width: 90px;
-        ">
-          <div style="
-            width: 52px;
-            height: 52px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-          ">${_wdDenomImg(d.agorot, isCoin) || `<span style="font-size:1.4rem;">${icon}</span>`}</div>
-          <div>
-            <div style="
-              font-weight: 800;
-              font-size: 1rem;
-              color: ${color};
-            ">${_wdEsc(d.labelHe)}</div>
-            <div id="wd-sub-${d.agorot}" style="
-              font-size: 0.72rem;
-              color: var(--color-text-muted);
-            ">${count > 0 ? '= ' + Currency.formatILS(count * d.agorot) : ''}</div>
-          </div>
+        <!-- Large image -->
+        <div style="height:${imgH}px;display:flex;align-items:center;justify-content:center;">
+          ${imgHTML || `<span style="font-size:1.4rem;">${icon}</span>`}
         </div>
-
-        <!-- Stepper -->
-        <div style="
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          flex-shrink: 0;
-        ">
-          <button
-            class="wd-minus"
-            data-denom="${d.agorot}"
-            style="
-              width: 44px; height: 44px;
-              border-radius: 12px;
-              border: 2px solid var(--color-border);
-              background: var(--color-bg);
-              font-size: 1.4rem;
-              font-weight: 700;
-              cursor: pointer;
-              color: var(--color-text-muted);
-              display: flex; align-items: center; justify-content: center;
-              flex-shrink: 0;
-              transition: background 0.1s;
-            "
-            onmousedown="this.style.background='#F3F4F6'"
-            onmouseup="this.style.background=''"
-            onmouseleave="this.style.background=''"
-            type="button"
-            aria-label="הפחת ${_wdEsc(d.labelHe)}"
-          >−</button>
-
-          <input
-            type="number"
-            min="0"
-            max="999"
-            data-denom="${d.agorot}"
-            value="${count}"
+        <!-- Label -->
+        <div style="font-size:0.72rem;font-weight:700;color:${color};white-space:nowrap;">
+          ${_wdEsc(d.labelHe)}
+        </div>
+        <!-- Stepper: compact − / count / + -->
+        <div style="display:flex;align-items:center;gap:3px;width:100%;justify-content:center;">
+          <button class="wd-minus" data-denom="${d.agorot}" type="button"
+            aria-label="פחות"
+            style="width:32px;height:32px;border-radius:8px;border:1.5px solid var(--color-border);
+              background:var(--color-bg);font-size:1.2rem;font-weight:700;cursor:pointer;
+              color:var(--color-text-muted);display:flex;align-items:center;justify-content:center;
+              flex-shrink:0;">−</button>
+          <input type="number" min="0" max="999" data-denom="${d.agorot}" value="${count}"
             inputmode="numeric"
-            style="
-              width: 58px;
-              text-align: center;
-              padding: 8px 4px;
-              border: 2px solid var(--color-border);
-              border-radius: 12px;
-              background: var(--color-bg);
-              color: var(--color-text);
-              font-size: 1.25rem;
-              font-weight: 800;
-            "
-          >
-
-          <button
-            class="wd-plus"
-            data-denom="${d.agorot}"
-            style="
-              width: 44px; height: 44px;
-              border-radius: 12px;
-              border: 2px solid #0EA5E9;
-              background: #EFF6FF;
-              font-size: 1.4rem;
-              font-weight: 700;
-              cursor: pointer;
-              color: #0EA5E9;
-              display: flex; align-items: center; justify-content: center;
-              flex-shrink: 0;
-              transition: background 0.1s;
-            "
-            onmousedown="this.style.background='#DBEAFE'"
-            onmouseup="this.style.background='#EFF6FF'"
-            onmouseleave="this.style.background='#EFF6FF'"
-            type="button"
-            aria-label="הוסף ${_wdEsc(d.labelHe)}"
-          >+</button>
+            style="width:44px;text-align:center;padding:4px 2px;
+              border:1.5px solid var(--color-border);border-radius:8px;
+              background:var(--color-bg);color:var(--color-text);
+              font-size:1.05rem;font-weight:800;font-family:inherit;">
+          <button class="wd-plus" data-denom="${d.agorot}" type="button"
+            aria-label="יותר"
+            style="width:32px;height:32px;border-radius:8px;border:1.5px solid #0EA5E9;
+              background:#EFF6FF;font-size:1.2rem;font-weight:700;cursor:pointer;
+              color:#0EA5E9;display:flex;align-items:center;justify-content:center;
+              flex-shrink:0;">+</button>
+        </div>
+        <!-- Subtotal -->
+        <div id="wd-sub-${d.agorot}" style="font-size:0.62rem;color:${color};opacity:0.75;min-height:0.9em;">
+          ${count > 0 ? '= ' + Currency.formatILS(count * d.agorot) : ''}
         </div>
       </div>`;
   }
 
   el.innerHTML = `
-    <div style="margin-top: 4px;">
-
-      <!-- Header row -->
-      <div style="
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 16px;
-      ">
-        <button
-          id="wd-editor-back"
-          style="
-            background: none;
-            border: none;
-            font-size: 1.4rem;
-            cursor: pointer;
-            padding: 4px 8px;
-            border-radius: 10px;
-            color: var(--color-text-muted);
-            line-height: 1;
-          "
-          type="button"
-          aria-label="חזרה"
-        >←</button>
-        <div style="font-size: 1.1rem; font-weight: 800; color: var(--color-text);">
-          🪙 עדכון תכולת הארנק שלי
-        </div>
+    <div style="margin-top:4px;">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <button id="wd-editor-back" type="button" aria-label="חזרה"
+          style="background:none;border:none;font-size:1.5rem;font-weight:900;cursor:pointer;
+            padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;">→</button>
+        <div style="font-size:1.1rem;font-weight:800;color:var(--color-text);">🪙 עדכון תכולת הארנק שלי</div>
       </div>
 
-      <!-- Instruction -->
-      <p style="
-        font-size: 0.88rem;
-        color: var(--color-text-muted);
-        margin: 0 0 14px;
-        line-height: 1.5;
-      ">
+      <p style="font-size:0.85rem;color:var(--color-text-muted);margin:0 0 12px;line-height:1.5;">
         ספרו כמה יש מכל סוג וכתבו כאן את המספר:
       </p>
 
-      <!-- Coins section -->
-      <div style="
-        font-size: 0.75rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        color: #92400E;
-        margin-bottom: 2px;
-      ">🪙 מטבעות</div>
-      ${coinsAsc.map(d => _denomRow(d, true)).join('')}
-
-      <!-- Bills section -->
-      <div style="
-        font-size: 0.75rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        color: #065F46;
-        margin: 16px 0 2px;
-      ">💵 שטרות</div>
-      ${billsAsc.map(d => _denomRow(d, false)).join('')}
-
-      <!-- Live total -->
-      <div style="
-        margin-top: 20px;
-        padding: 14px;
-        background: linear-gradient(135deg, #EFF6FF, #DBEAFE);
-        border-radius: 16px;
-        text-align: center;
-      ">
-        <div style="
-          font-size: 0.8rem;
-          color: #1E40AF;
-          font-weight: 600;
-          margin-bottom: 4px;
-        ">סה"כ בארנק שלי</div>
-        <div
-          id="wd-editor-total"
-          style="
-            font-size: 2.2rem;
-            font-weight: 900;
-            color: #0EA5E9;
-            line-height: 1.1;
-            letter-spacing: -0.5px;
-          "
-        >${Currency.formatILS(_calcEditorTotal(el, counts))}</div>
+      <!-- 2-column denomination grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+        ${ALL_DENOMS_ASC.map(d => _denomCard(d)).join('')}
       </div>
 
-      <!-- Status -->
-      <div
-        id="wd-editor-status"
-        style="
-          min-height: 1.4em;
-          font-size: 0.85rem;
-          text-align: center;
-          margin-top: 10px;
-        "
-      ></div>
+      <!-- Live total -->
+      <div style="padding:14px;background:linear-gradient(135deg,#EFF6FF,#DBEAFE);
+        border-radius:16px;text-align:center;">
+        <div style="font-size:0.8rem;color:#1E40AF;font-weight:600;margin-bottom:4px;">סה"כ בארנק שלי</div>
+        <div id="wd-editor-total" style="font-size:2.2rem;font-weight:900;color:#0EA5E9;
+          line-height:1.1;letter-spacing:-0.5px;">
+          ${Currency.formatILS(_calcEditorTotal(el, counts))}
+        </div>
+      </div>
 
-      <!-- Save button -->
-      <button
-        id="wd-editor-save"
-        style="
-          margin-top: 12px;
-          width: 100%;
-          padding: 16px;
-          background: linear-gradient(135deg, #16A34A 0%, #22C55E 100%);
-          color: #fff;
-          border: none;
-          border-radius: 16px;
-          font-size: 1.1rem;
-          font-weight: 800;
-          cursor: pointer;
-          box-shadow: 0 4px 12px rgba(22,163,74,0.30);
-          transition: transform 0.12s;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-        "
+      <div id="wd-editor-status" style="min-height:1.4em;font-size:0.85rem;
+        text-align:center;margin-top:10px;"></div>
+
+      <button id="wd-editor-save" type="button"
+        style="margin-top:12px;width:100%;padding:16px;
+          background:linear-gradient(135deg,#16A34A 0%,#22C55E 100%);
+          color:#fff;border:none;border-radius:16px;
+          font-size:1.1rem;font-weight:800;cursor:pointer;font-family:inherit;
+          box-shadow:0 4px 12px rgba(22,163,74,0.30);transition:transform 0.12s;"
         onmousedown="this.style.transform='scale(0.97)'"
         onmouseup="this.style.transform=''"
-        onmouseleave="this.style.transform=''"
-        type="button"
-      >
+        onmouseleave="this.style.transform=''">
         ✓ שמרתי — זה הארנק שלי!
       </button>
-
     </div>`;
 
   // ── Wire up back button ──────────────────────────────────────
@@ -674,8 +487,13 @@ function _getCount(counts, agorot) {
   return Math.max(0, parseInt(v, 10) || 0);
 }
 
-/** Maps a denomination's agorot value to a relative image path for GitHub Pages. */
-function _wdDenomImg(agorot, isCoin) {
+/**
+ * Renders a denomination image.
+ * @param {number}  agorot
+ * @param {boolean} isCoin  — used as fallback height if h not provided
+ * @param {number}  [h]     — explicit height in px (overrides default)
+ */
+function _wdDenomImg(agorot, isCoin, h) {
   const MAP = {
     10:    './gfx/Agorot-10.png',
     50:    './gfx/Agorot-50.png',
@@ -690,8 +508,23 @@ function _wdDenomImg(agorot, isCoin) {
   };
   const src = MAP[agorot];
   if (!src) return '';
-  const h = isCoin ? 38 : 26;
-  return `<img src="${src}" style="height:${h}px;width:auto;max-width:48px;display:block;object-fit:contain;" alt="" draggable="false" loading="lazy">`;
+  const height = h || (isCoin ? 38 : 26);
+  return `<img src="${src}" style="height:${height}px;width:auto;max-width:${height + 12}px;display:block;object-fit:contain;" alt="" draggable="false" loading="lazy">`;
+}
+
+/** Animated loading spinner for use in wallet views. */
+function _wdSpinnerHTML(msg) {
+  return `
+    <div style="text-align:center;padding:28px 0 16px;">
+      <div style="
+        width:36px;height:36px;border-radius:50%;
+        border:3.5px solid var(--color-border,#E2E8F0);
+        border-top-color:var(--color-primary,#0EA5E9);
+        margin:0 auto 10px;
+        animation:ph-spin 0.8s linear infinite;
+      "></div>
+      <p style="color:var(--color-text-muted);font-size:0.88rem;margin:0;">${_wdEsc(msg || 'טוען...')}</p>
+    </div>`;
 }
 
 function _wdEsc(str) {

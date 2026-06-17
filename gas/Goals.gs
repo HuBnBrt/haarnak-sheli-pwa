@@ -154,9 +154,8 @@ function updateGoal(payload) {
   const iGoalId = headers.indexOf('goal_id');
   const iUserId = headers.indexOf('user_id');
   const iNotes  = headers.indexOf('notes');
-  // Future Phase 5 columns (referenced in commented section below):
-  // const iTitle  = headers.indexOf('title');
-  // const iTarget = headers.indexOf('target_amount_agorot');
+  // Phase 6: targetAgorot column (used for price edits from goals-display)
+  const iTarget = headers.indexOf('target_amount_agorot');
 
   if ([iGoalId, iUserId].some(i => i === -1)) {
     throw new Error('goals: חסרות עמודות חובה. ודא שהרצת setupSheets().');
@@ -190,16 +189,11 @@ function updateGoal(payload) {
     sheet.getRange(sheetRow, iNotes + 1).setValue(JSON.stringify(meta));
   }
 
-  // ── Phase 5+: title and targetAgorot ─────────────────────────
-  // Uncomment when Phase 5 goal editing UI is implemented.
-  // if (payload.title !== undefined && iTitle >= 0) {
-  //   const newTitle = String(payload.title).trim();
-  //   if (newTitle) sheet.getRange(sheetRow, iTitle + 1).setValue(newTitle);
-  // }
-  // if (payload.targetAgorot !== undefined && iTarget >= 0) {
-  //   const t = parseInt(payload.targetAgorot, 10);
-  //   if (t > 0) sheet.getRange(sheetRow, iTarget + 1).setValue(t);
-  // }
+  // ── Phase 6: targetAgorot price update ───────────────────────
+  if (payload.targetAgorot !== undefined && iTarget >= 0) {
+    const t = parseInt(payload.targetAgorot, 10);
+    if (t > 0) sheet.getRange(sheetRow, iTarget + 1).setValue(t);
+  }
 
   appendAuditLog({
     actingUserId:       userId,

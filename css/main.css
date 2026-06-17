@@ -45,6 +45,9 @@ body {
   padding-bottom: var(--safe-bottom);
 }
 
+/* ── Loading Spinner ────────────────────────────────────────── */
+@keyframes ph-spin { to { transform: rotate(360deg); } }
+
 /* ── Loading Overlay ────────────────────────────────────────── */
 #app-loading {
   position: fixed;

@@ -4,14 +4,13 @@
 // Two purchase paths launched from a single entry screen (Step 0):
 //
 //   Path A — Goal purchase (physical wallet):
-//     Step 0 (select goals)
-//       → _phGoalPriceReview (per-goal price editing, no API calls)
-//         → Step 2 (wallet denomination selection)
-//           → Step 3 (change entry, if overpaid)
-//             → Step 4 (confirm)
-//               → recordPurchase  (updates wallet_denominations)
-//               → completeGoal × N  (marks goals done; skipSavingsDeduction:true)
-//               → success / recoverable-warning if completeGoal partially fails
+//     Step 0 (select goals + optional extra items; inline price editing)
+//       → Step 2 (wallet denomination selection)
+//         → Step 3 (change entry, if overpaid)
+//           → Step 4 (confirm)
+//             → recordPurchase  (updates wallet_denominations)
+//             → completeGoal × N  (marks goals done; skipSavingsDeduction:true)
+//             → success / recoverable-warning if completeGoal partially fails
 //
 //   Path B — Regular store purchase (physical wallet):
 //     Step 0 (enter description + price)
@@ -72,42 +71,44 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
   // cart[goalId] = price agorot for goals selected for purchase
   const cart = {};
 
-  // ── Section 1: purchasable goal cards ──────────────────────
+  // customItems: [{desc, agorot}], max 3
+  let customItems = [{ desc: '', agorot: 0 }];
+
+  // ── Goals section HTML (rendered below custom) ─────────────
   let goalSectionHTML = '';
   if (purchasableGoals.length > 0) {
     goalSectionHTML = `
-      <div style="${_phSectionLabelStyle()}">🏆 מטרות שמוכנות למימוש</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-        ${purchasableGoals.map(g => _phGoalCardHTML(g)).join('')}
+      <div style="
+        display:flex;align-items:center;gap:8px;margin:14px 0 10px;
+        color:var(--color-text-muted);font-size:0.78rem;font-weight:600;
+      ">
+        <div style="flex:1;height:1px;background:var(--color-border);"></div>
+        <span>— או —</span>
+        <div style="flex:1;height:1px;background:var(--color-border);"></div>
       </div>
-      <div id="gp-selected-panel" style="display:none;"></div>`;
+      <div style="${_phSectionLabelStyle()}">🏆 מטרות שמוכנות למימוש</div>
+      <div id="gp-goals-grid" style="
+        display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;
+      ">
+        ${purchasableGoals.map(g => _phGoalCardHTML(g)).join('')}
+      </div>`;
   } else if (goals.length > 0) {
     goalSectionHTML = `
       <div style="
         font-size:0.82rem;color:var(--color-text-muted);
         text-align:center;padding:8px 4px 14px;
         background:var(--color-bg-subtle,#F8FAFC);
-        border-radius:12px;margin-bottom:12px;line-height:1.5;
+        border-radius:12px;margin-top:10px;line-height:1.5;
       ">
         🏆 יש לך ${goals.length === 1 ? 'מטרה' : `${goals.length} מטרות`} —
         אבל אין מספיק כסף בארנק כדי למממש אף אחת מהן עכשיו.
       </div>`;
   }
 
-  const dividerHTML = (purchasableGoals.length > 0 || goals.length > 0) ? `
-    <div style="
-      display:flex;align-items:center;gap:8px;margin-bottom:14px;
-      color:var(--color-text-muted);font-size:0.78rem;font-weight:600;
-    ">
-      <div style="flex:1;height:1px;background:var(--color-border);"></div>
-      <span>— או —</span>
-      <div style="flex:1;height:1px;background:var(--color-border);"></div>
-    </div>` : '';
-
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="ביטול">←</button>
+        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="ביטול">→</button>
         <span style="${_phHeaderTitleStyle()}">🛒 מה קונים עכשיו?</span>
       </div>
 
@@ -115,339 +116,325 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
       <div style="
         display:inline-flex;align-items:center;gap:6px;
         background:#EFF6FF;border:1.5px solid #93C5FD;
-        border-radius:20px;padding:4px 12px;margin-bottom:14px;
+        border-radius:20px;padding:4px 12px;margin-bottom:12px;
         font-size:0.82rem;font-weight:700;color:#1E40AF;
       ">💳 ארנק: ${Currency.formatILS(walletTotalAgorot)}</div>
 
+      <!-- Custom purchase section (FIRST) -->
+      <div style="${_phSectionLabelStyle()}">🛒 קונה משהו?</div>
+      <div id="gp-custom-rows"></div>
+      <button id="gp-add-item" type="button" style="
+        background:none;border:1.5px dashed var(--color-border);border-radius:10px;
+        color:var(--color-text-muted);font-size:0.8rem;font-weight:600;
+        cursor:pointer;padding:5px 12px;margin-bottom:4px;font-family:inherit;
+        display:inline-flex;align-items:center;gap:4px;
+      ">+ הוסף פריט נוסף</button>
+
       ${goalSectionHTML}
-      ${purchasableGoals.length > 0 ? dividerHTML : ''}
 
-      <!-- Section 2: custom / additional purchase -->
-      <div id="gp-custom-label" style="${_phSectionLabelStyle()}">🛒 קונה משהו אחר?</div>
-
-      <label style="${_phLabelStyle(true)}">על מה? (לא חובה)</label>
-      <input id="gp-desc" type="text"
-        placeholder="למשל: גלידה, מדבקות, ספר..."
-        maxlength="60"
-        style="
-          width:100%;box-sizing:border-box;padding:11px 14px;
-          font-family:inherit;font-size:0.95rem;
-          border:2px solid var(--color-border);border-radius:12px;
-          background:var(--color-bg);color:var(--color-text);
-          margin-bottom:10px;
+      <!-- Error -->
+      <div id="gp-err" style="
+        color:#DC2626;font-size:0.82rem;min-height:1.2em;margin-top:10px;margin-bottom:4px;
+      "></div>
+      <!-- Total + Continue side by side -->
+      <div style="display:flex;gap:8px;align-items:stretch;margin-top:4px;">
+        <div id="gp-total-strip" style="
+          flex:1;padding:9px 12px;border-radius:12px;
+          background:#F0FDF4;border:1.5px solid #86EFAC;
+          display:none;flex-direction:column;justify-content:center;
         ">
-
-      <label style="${_phLabelStyle(true)}">כמה עולה?</label>
-      <div style="position:relative;margin-bottom:10px;">
-        <input id="gp-price" type="number" inputmode="decimal"
-          min="0.01" step="0.01" placeholder="0.00"
-          style="
-            width:100%;box-sizing:border-box;
-            padding:14px 16px 14px 44px;
-            font-size:1.5rem;font-weight:800;font-family:inherit;
-            border:2.5px solid var(--color-border);border-radius:14px;
-            background:var(--color-bg);color:var(--color-text);
-            text-align:left;direction:ltr;
-          ">
-        <span style="
-          position:absolute;left:14px;top:50%;transform:translateY(-50%);
-          font-size:1.2rem;font-weight:700;color:var(--color-text-muted);
-          pointer-events:none;
-        ">₪</span>
-      </div>
-
-      <!-- Live total strip (hidden until total > 0) -->
-      <div id="gp-total-strip" style="
-        display:none;margin-bottom:10px;padding:10px 14px;
-        border-radius:12px;background:#F0FDF4;border:1.5px solid #86EFAC;
-      ">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:0.82rem;font-weight:700;color:#15803D;">סה"כ לתשלום</span>
-          <span id="gp-total-amount" style="font-weight:900;font-size:1.1rem;color:#15803D;"></span>
+          <div style="font-size:0.68rem;font-weight:700;color:#15803D;">סה"כ לתשלום</div>
+          <div id="gp-total-amount" style="font-weight:900;font-size:1.05rem;color:#15803D;line-height:1.2;"></div>
         </div>
+        <button id="gp-continue" type="button" disabled
+          style="${_phPrimaryBtnStyle()} flex:1.4;width:auto;opacity:0.4;white-space:nowrap;">
+          המשך ←
+        </button>
       </div>
-
-      <div id="gp-err" style="color:#DC2626;font-size:0.85rem;min-height:1.2em;margin-bottom:8px;"></div>
-
-      <button id="gp-continue" type="button" disabled
-        style="${_phPrimaryBtnStyle()} opacity:0.4;">
-        המשך לתשלום ←
-      </button>
     </div>`;
 
-  // ── Wire events ─────────────────────────────────────────────
-
+  // ── Back ───────────────────────────────────────────────────
   document.getElementById('ph-back').addEventListener('click', onExit);
 
-  // Goal card clicks — toggle cart
-  el.querySelectorAll('.gp-goal-card').forEach(card => {
-    card.addEventListener('click', () => {
-      if (card.dataset.disabled === 'true') return;
-      const goalId = card.dataset.goalId;
-      const goal   = purchasableGoals.find(g => g.goalId === goalId);
-      if (!goal) return;
+  // ── Custom rows renderer ────────────────────────────────────
+  function _renderCustomRows() {
+    const rowsEl = document.getElementById('gp-custom-rows');
+    if (!rowsEl) return;
+    rowsEl.innerHTML = customItems.map((item, idx) => `
+      <div class="gp-custom-row" data-idx="${idx}" style="
+        display:flex;gap:6px;align-items:center;margin-bottom:8px;
+      ">
+        <input class="gpc-desc" data-idx="${idx}" type="text"
+          placeholder="שם הפריט (לא חובה)"
+          maxlength="40"
+          value="${_phEsc(item.desc)}"
+          style="
+            flex:3;min-width:0;padding:9px 10px;font-family:inherit;font-size:0.88rem;
+            border:2px solid var(--color-border);border-radius:10px;
+            background:var(--color-bg);color:var(--color-text);box-sizing:border-box;
+          ">
+        <div style="flex:2;min-width:0;position:relative;">
+          <input class="gpc-price" data-idx="${idx}" type="number" inputmode="decimal"
+            min="0.01" step="0.01" placeholder="0.00"
+            value="${item.agorot > 0 ? (item.agorot / 100).toFixed(2) : ''}"
+            style="
+              width:100%;box-sizing:border-box;padding:9px 10px 9px 24px;
+              font-size:0.9rem;font-weight:800;font-family:inherit;
+              border:2px solid var(--color-border);border-radius:10px;
+              background:var(--color-bg);color:var(--color-text);
+              text-align:left;direction:ltr;
+            ">
+          <span style="
+            position:absolute;left:7px;top:50%;transform:translateY(-50%);
+            font-size:0.78rem;font-weight:700;color:var(--color-text-muted);pointer-events:none;
+          ">₪</span>
+        </div>
+        ${customItems.length > 1 ? `
+          <button class="gpc-remove" data-idx="${idx}" type="button" style="
+            flex-shrink:0;background:none;border:1.5px solid #FCA5A5;
+            border-radius:8px;color:#DC2626;font-size:0.85rem;line-height:1;
+            cursor:pointer;padding:6px 8px;font-family:inherit;
+          ">✕</button>` : ''}
+      </div>`).join('');
 
-      if (goalId in cart) {
-        delete cart[goalId];
-      } else {
-        const otherTotal   = Object.values(cart).reduce((s, p) => s + p, 0);
-        const customAgorot = _phGetCustomAgorot();
-        if (otherTotal + prices[goalId] + customAgorot > walletTotalAgorot) return;
-        cart[goalId] = prices[goalId];
-      }
-
-      _phRebuildSelectedPanel(el, cart, prices, purchasableGoals, walletTotalAgorot);
+    rowsEl.querySelectorAll('.gpc-desc').forEach(inp => {
+      inp.addEventListener('input', () => {
+        customItems[parseInt(inp.dataset.idx, 10)].desc = inp.value;
+      });
     });
+    rowsEl.querySelectorAll('.gpc-price').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const i = parseInt(inp.dataset.idx, 10);
+        customItems[i].agorot = Currency.parseILSInput((inp.value || '').trim()) || 0;
+        _syncAll();
+      });
+    });
+    rowsEl.querySelectorAll('.gpc-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        customItems.splice(parseInt(btn.dataset.idx, 10), 1);
+        _renderCustomRows();
+        const addBtn = document.getElementById('gp-add-item');
+        if (addBtn) addBtn.style.display = customItems.length >= 3 ? 'none' : 'inline-flex';
+        _syncAll();
+      });
+    });
+  }
+
+  // ── Add item ────────────────────────────────────────────────
+  document.getElementById('gp-add-item').addEventListener('click', () => {
+    if (customItems.length >= 3) return;
+    customItems.push({ desc: '', agorot: 0 });
+    _renderCustomRows();
+    const addBtn = document.getElementById('gp-add-item');
+    if (addBtn) addBtn.style.display = customItems.length >= 3 ? 'none' : 'inline-flex';
   });
 
-  // Custom price input → update total + card states
-  document.getElementById('gp-price').addEventListener('input', () => {
-    const cust = _phGetCustomAgorot();
-    _phUpdateTotalAndButton(el, cart, prices, cust, walletTotalAgorot);
-    _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, cust, walletTotalAgorot);
-  });
+  // ── Goal card events ─────────────────────────────────────────
+  function _wireGoalCards() {
+    el.querySelectorAll('.gp-goal-card').forEach(card => {
+      card.addEventListener('click', e => {
+        if (e.target.closest('.gpr-card-editor') ||
+            e.target.classList.contains('gpr-card-toggle')) return;
+        if (card.dataset.disabled === 'true') return;
 
-  // Continue button
+        const goalId = card.dataset.goalId;
+        const goal   = purchasableGoals.find(g => g.goalId === goalId);
+        if (!goal) return;
+
+        if (goalId in cart) {
+          delete cart[goalId];
+        } else {
+          const otherTotal = Object.keys(cart).reduce((s, gid) => s + (prices[gid] || 0), 0);
+          if (otherTotal + prices[goalId] + _custTotal() > walletTotalAgorot) return;
+          cart[goalId] = prices[goalId];
+        }
+        _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, _custTotal(), walletTotalAgorot);
+        _syncAll();
+      });
+    });
+
+    el.querySelectorAll('.gpr-card-toggle').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        const gid      = btn.dataset.goalId;
+        const editorEl = document.getElementById(`gpr-card-editor-${gid}`);
+        if (!editorEl) return;
+        const isOpen = editorEl.style.display !== 'none';
+        editorEl.style.display = isOpen ? 'none' : '';
+        if (!isOpen) {
+          const inp = editorEl.querySelector('input');
+          if (inp) { inp.focus(); inp.select(); }
+        }
+      });
+    });
+
+    el.querySelectorAll('.gpr-price-input').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const gid    = inp.dataset.goalId;
+        const agorot = Currency.parseILSInput((inp.value || '').trim());
+        const orig   = purchasableGoals.find(g => g.goalId === gid);
+        prices[gid]  = (agorot && agorot > 0) ? agorot : (orig ? orig.targetAgorot : 0);
+        if (gid in cart) cart[gid] = prices[gid];
+        const dispEl = document.getElementById(`gpr-card-display-${gid}`);
+        if (dispEl) dispEl.textContent = Currency.formatILS(prices[gid]);
+        _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, _custTotal(), walletTotalAgorot);
+        _syncAll();
+      });
+    });
+  }
+
+  // ── Custom total helper ──────────────────────────────────────
+  function _custTotal() {
+    return customItems.reduce((s, item) => s + (item.agorot || 0), 0);
+  }
+
+  // ── Sync total strip + button + card states ──────────────────
+  function _syncAll() {
+    const custTotal  = _custTotal();
+    const goalTotal  = Object.keys(cart).reduce((s, gid) => s + (prices[gid] || 0), 0);
+    const total      = custTotal + goalTotal;
+    const canProceed = total > 0 && total <= walletTotalAgorot;
+
+    const stripEl  = document.getElementById('gp-total-strip');
+    const amountEl = document.getElementById('gp-total-amount');
+    const errEl    = document.getElementById('gp-err');
+    const contBtn  = document.getElementById('gp-continue');
+
+    if (total > 0) {
+      if (stripEl) {
+        stripEl.style.display     = 'flex';
+        stripEl.style.background  = total > walletTotalAgorot ? '#FEF2F2' : '#F0FDF4';
+        stripEl.style.borderColor = total > walletTotalAgorot ? '#FCA5A5' : '#86EFAC';
+      }
+      if (amountEl) {
+        amountEl.textContent = Currency.formatILS(total);
+        amountEl.style.color = total > walletTotalAgorot ? '#DC2626' : '#15803D';
+      }
+      if (errEl) {
+        errEl.textContent = total > walletTotalAgorot
+          ? 'אין מספיק בארנק. אולי צריך לבקש מאבאמא לפדות מהחיסכון.' : '';
+      }
+    } else {
+      if (stripEl) stripEl.style.display = 'none';
+      if (errEl)   errEl.textContent = '';
+    }
+    if (contBtn) {
+      contBtn.disabled      = !canProceed;
+      contBtn.style.opacity = canProceed ? '1' : '0.4';
+    }
+    if (purchasableGoals.length > 0) {
+      _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, custTotal, walletTotalAgorot);
+    }
+  }
+
+  // ── Continue ─────────────────────────────────────────────────
   document.getElementById('gp-continue').addEventListener('click', () => {
-    const customAgorot = _phGetCustomAgorot();
-    const goalTotal    = Object.keys(cart).reduce((s, gid) => s + (prices[gid] || 0), 0);
-    const totalAgorot  = goalTotal + customAgorot;
-    const errEl        = document.getElementById('gp-err');
+    const custTotal  = _custTotal();
+    const goalTotal  = Object.keys(cart).reduce((s, gid) => s + (prices[gid] || 0), 0);
+    const total      = custTotal + goalTotal;
+    const errEl      = document.getElementById('gp-err');
 
-    if (!totalAgorot || totalAgorot <= 0) {
+    if (!total || total <= 0) {
       if (errEl) errEl.textContent = 'יש לבחור מטרה או להזין מחיר.';
       return;
     }
-    if (totalAgorot > walletTotalAgorot) {
+    if (total > walletTotalAgorot) {
       if (errEl) errEl.textContent = 'אין מספיק בארנק.';
       return;
     }
     if (errEl) errEl.textContent = '';
 
-    const hasGoals   = Object.keys(cart).length > 0;
-    const hasCustom  = customAgorot > 0;
-    const customDesc = (document.getElementById('gp-desc').value || '').trim();
+    const hasGoals = Object.keys(cart).length > 0;
+    const hasCust  = custTotal > 0;
 
     let description, goalContext;
     if (hasGoals) {
       const selectedGoals = purchasableGoals.filter(g => g.goalId in cart);
       const goalTitles    = selectedGoals.map(g => `${g.emoji} ${g.title}`);
-      description = goalTitles.join(' + ');
-      if (hasCustom) description += (customDesc ? ` + ${customDesc}` : ' + פריט נוסף');
-
+      description         = goalTitles.join(' + ');
+      if (hasCust) {
+        const filled = customItems.filter(i => i.agorot > 0);
+        description += filled.length === 1
+          ? ` + ${filled[0].desc || 'פריט נוסף'}`
+          : ` + ${filled.length} פריטים נוספים`;
+      }
       goalContext = {
         goalIds:    selectedGoals.map(g => g.goalId),
         goalTitles: goalTitles,
-        prices:     selectedGoals.reduce(function(acc, g) {
+        prices:     selectedGoals.reduce((acc, g) => {
           acc[g.goalId] = prices[g.goalId] || g.targetAgorot; return acc;
         }, {}),
       };
     } else {
-      description = customDesc || 'קנייה';
-      goalContext = null;
+      const filled = customItems.filter(i => i.agorot > 0);
+      description  = filled.map(i => i.desc || 'פריט').join(' + ') || 'קנייה';
+      goalContext  = null;
     }
 
     const onBack = () => _phStep0(el, userId, gender, onExit);
-    _phStep2(el, userId, gender, onExit, totalAgorot, description, onBack, goalContext);
+    _phStep2(el, userId, gender, onExit, total, description, onBack, goalContext);
   });
 
-  // Initial state
-  _phRebuildSelectedPanel(el, cart, prices, purchasableGoals, walletTotalAgorot);
+  // ── Initial render ────────────────────────────────────────────
+  _renderCustomRows();
+  if (purchasableGoals.length > 0) _wireGoalCards();
+  _syncAll();
 }
 
-/** HTML for one purchasable goal card (no "מוכן לקנייה" badge). */
+/** Compact goal card for 4-per-row grid. Inline price editor, checkmark on select. */
 function _phGoalCardHTML(goal) {
+  const gid = _phEsc(goal.goalId);
   return `
-    <div class="gp-goal-card" data-goal-id="${_phEsc(goal.goalId)}" style="
-      border:2px dashed #86EFAC;border-radius:14px;
-      padding:10px 8px;cursor:pointer;
-      background:var(--color-bg);
-      position:relative;user-select:none;
-      display:flex;flex-direction:column;align-items:center;gap:4px;
+    <div class="gp-goal-card" data-goal-id="${gid}" style="
+      border:2px dashed #86EFAC;border-radius:12px;
+      padding:7px 5px 6px;cursor:pointer;
+      background:var(--color-bg);position:relative;user-select:none;
+      display:flex;flex-direction:column;align-items:center;gap:2px;
     ">
       <div class="gp-chk" style="
-        display:none;position:absolute;top:5px;left:5px;
-        width:20px;height:20px;border-radius:50%;
+        display:none;position:absolute;top:4px;left:4px;
+        width:15px;height:15px;border-radius:50%;
         background:#16A34A;color:#fff;
-        font-size:0.68rem;font-weight:900;
+        font-size:0.55rem;font-weight:900;
         align-items:center;justify-content:center;
       ">✓</div>
-      <div style="font-size:1.6rem;line-height:1;">${goal.emoji}</div>
+      <div style="font-size:1.4rem;line-height:1.1;">${goal.emoji}</div>
       <div style="
-        font-weight:800;font-size:0.8rem;color:var(--color-text);
-        text-align:center;
-        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+        font-weight:800;font-size:0.68rem;color:var(--color-text);
+        text-align:center;width:100%;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
       ">${_phEsc(goal.title)}</div>
-      <div style="font-weight:900;font-size:0.88rem;color:#16A34A;text-align:center;">
-        ${Currency.formatILS(goal.targetAgorot)}
+      <div id="gpr-card-display-${gid}" style="
+        font-weight:900;font-size:0.75rem;color:#16A34A;
+      ">${Currency.formatILS(goal.targetAgorot)}</div>
+      <button class="gpr-card-toggle" data-goal-id="${gid}" type="button" style="
+        background:none;border:none;color:var(--color-text-muted);
+        font-size:0.58rem;cursor:pointer;padding:1px 2px;font-family:inherit;line-height:1;
+      ">✏️</button>
+      <div id="gpr-card-editor-${gid}" class="gpr-card-editor" style="
+        display:none;width:100%;margin-top:2px;
+      ">
+        <div style="position:relative;">
+          <input class="gpr-price-input" data-goal-id="${gid}"
+            type="number" inputmode="decimal" min="0.01" step="0.01"
+            value="${(goal.targetAgorot / 100).toFixed(2)}"
+            style="
+              width:100%;box-sizing:border-box;
+              padding:4px 4px 4px 18px;
+              font-size:0.72rem;font-weight:800;font-family:inherit;
+              border:1.5px solid var(--color-border);border-radius:7px;
+              background:var(--color-bg);color:var(--color-text);
+              text-align:left;direction:ltr;
+            ">
+          <span style="
+            position:absolute;left:4px;top:50%;transform:translateY(-50%);
+            font-size:0.6rem;font-weight:700;color:var(--color-text-muted);
+          ">₪</span>
+        </div>
       </div>
     </div>`;
 }
 
-/** Read agorot from the custom price input (#gp-price). */
-function _phGetCustomAgorot() {
-  const el  = document.getElementById('gp-price');
-  const raw = (el ? el.value : '').trim();
-  return Currency.parseILSInput(raw) || 0;
-}
-
-/**
- * Rebuild the selected-goals panel below the grid, then rewire its events.
- * Called when the cart selection changes (goal card click).
- */
-function _phRebuildSelectedPanel(el, cart, prices, purchasableGoals, walletTotalAgorot) {
-  const customAgorot = _phGetCustomAgorot();
-  const panelEl   = document.getElementById('gp-selected-panel');
-  const cartKeys  = Object.keys(cart);
-
-  if (panelEl) {
-    if (cartKeys.length === 0) {
-      panelEl.style.display = 'none';
-      panelEl.innerHTML     = '';
-    } else {
-      panelEl.style.display = '';
-      panelEl.innerHTML     = _phSelectedPanelHTML(cart, prices, purchasableGoals);
-
-      // Wire "המחיר השתנה?" toggle buttons
-      panelEl.querySelectorAll('.gpr-toggle').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const gid      = btn.dataset.goalId;
-          const editorEl = document.getElementById(`gpr-editor-${gid}`);
-          if (!editorEl) return;
-          const isOpen   = editorEl.style.display !== 'none';
-          editorEl.style.display = isOpen ? 'none' : '';
-          if (!isOpen) {
-            const inp = editorEl.querySelector('input');
-            if (inp) { inp.focus(); inp.select(); }
-          }
-        });
-      });
-
-      // Wire price inputs — update price without rebuilding panel (keeps focus)
-      panelEl.querySelectorAll('.gpr-price-input').forEach(input => {
-        input.addEventListener('input', () => {
-          const gid    = input.dataset.goalId;
-          const agorot = Currency.parseILSInput((input.value || '').trim());
-          const orig   = purchasableGoals.find(g => g.goalId === gid);
-          prices[gid]  = (agorot && agorot > 0) ? agorot : (orig ? orig.targetAgorot : 0);
-          if (gid in cart) cart[gid] = prices[gid];
-
-          // Update price display span without full rebuild
-          const dispEl = document.getElementById(`gpr-display-${gid}`);
-          if (dispEl) dispEl.textContent = Currency.formatILS(prices[gid]);
-
-          _phUpdateTotalAndButton(el, cart, prices, _phGetCustomAgorot(), walletTotalAgorot);
-          _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, _phGetCustomAgorot(), walletTotalAgorot);
-        });
-      });
-    }
-  }
-
-  // Update dynamic custom section label
-  const customLabel = document.getElementById('gp-custom-label');
-  if (customLabel) {
-    customLabel.textContent = cartKeys.length > 0
-      ? 'רוצה להוסיף עוד משהו?'
-      : '🛒 קונה משהו אחר?';
-  }
-
-  _phUpdateTotalAndButton(el, cart, prices, customAgorot, walletTotalAgorot);
-  _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, customAgorot, walletTotalAgorot);
-}
-
-/** Build the inner HTML for the selected-goals price panel. */
-function _phSelectedPanelHTML(cart, prices, purchasableGoals) {
-  const rows = purchasableGoals
-    .filter(g => g.goalId in cart)
-    .map(g => {
-      const gid          = _phEsc(g.goalId);
-      const currentPrice = prices[g.goalId] || g.targetAgorot;
-      return `
-        <div style="padding:6px 0;border-bottom:1px solid var(--color-border);">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-            <div style="display:flex;align-items:center;gap:6px;min-width:0;">
-              <span style="font-size:1.2rem;flex-shrink:0;">${g.emoji}</span>
-              <span style="font-weight:700;font-size:0.88rem;color:var(--color-text);
-                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_phEsc(g.title)}</span>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-              <span id="gpr-display-${gid}" style="font-weight:800;font-size:0.95rem;color:#16A34A;">
-                ${Currency.formatILS(currentPrice)}
-              </span>
-              <button class="gpr-toggle" data-goal-id="${gid}" type="button" style="
-                background:none;border:1.5px solid var(--color-border);border-radius:7px;
-                padding:3px 8px;font-size:0.68rem;font-weight:600;font-family:inherit;
-                color:var(--color-text-muted);cursor:pointer;white-space:nowrap;
-              ">✏️ המחיר השתנה?</button>
-            </div>
-          </div>
-          <div id="gpr-editor-${gid}" style="display:none;margin-top:6px;padding:0 2px;">
-            <div style="position:relative;">
-              <input class="gpr-price-input" data-goal-id="${gid}"
-                type="number" inputmode="decimal" min="0.01" step="0.01"
-                value="${(currentPrice / 100).toFixed(2)}"
-                style="
-                  width:100%;box-sizing:border-box;
-                  padding:9px 14px 9px 38px;
-                  font-size:1.05rem;font-weight:800;font-family:inherit;
-                  border:2px solid var(--color-border);border-radius:10px;
-                  background:var(--color-bg);color:var(--color-text);
-                  text-align:left;direction:ltr;
-                ">
-              <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);
-                font-size:0.95rem;font-weight:700;color:var(--color-text-muted);pointer-events:none;">₪</span>
-            </div>
-          </div>
-        </div>`;
-    }).join('');
-
-  return `
-    <div style="
-      background:var(--color-bg-subtle,#F8FAFC);border:1.5px solid var(--color-border);
-      border-radius:12px;padding:10px 12px;margin-bottom:10px;
-    ">
-      <div style="font-size:0.7rem;font-weight:700;color:var(--color-text-muted);
-        margin-bottom:4px;letter-spacing:0.04em;">בחרת למימוש</div>
-      ${rows}
-    </div>`;
-}
-
-/** Update total strip + continue button text/state. No panel rebuild. */
-function _phUpdateTotalAndButton(el, cart, prices, customAgorot, walletTotalAgorot) {
-  const goalTotal   = Object.keys(cart).reduce((s, gid) => s + (prices[gid] || 0), 0);
-  const totalAgorot = goalTotal + customAgorot;
-  const canProceed  = totalAgorot > 0 && totalAgorot <= walletTotalAgorot;
-
-  const totalStrip    = document.getElementById('gp-total-strip');
-  const totalAmountEl = document.getElementById('gp-total-amount');
-  const errEl         = document.getElementById('gp-err');
-  const contBtn       = document.getElementById('gp-continue');
-
-  if (totalAgorot > 0) {
-    if (totalStrip) totalStrip.style.display = '';
-    if (totalAmountEl) totalAmountEl.textContent = Currency.formatILS(totalAgorot);
-    if (totalAgorot > walletTotalAgorot) {
-      if (totalStrip)    { totalStrip.style.background = '#FEF2F2'; totalStrip.style.borderColor = '#FCA5A5'; }
-      if (totalAmountEl) totalAmountEl.style.color = '#DC2626';
-      if (errEl)         errEl.textContent = 'אין מספיק בארנק. אולי צריך לבקש מאבאמא לפדות מהחיסכון.';
-    } else {
-      if (totalStrip)    { totalStrip.style.background = '#F0FDF4'; totalStrip.style.borderColor = '#86EFAC'; }
-      if (totalAmountEl) totalAmountEl.style.color = '#15803D';
-      if (errEl)         errEl.textContent = '';
-    }
-  } else {
-    if (totalStrip) totalStrip.style.display = 'none';
-    if (errEl)      errEl.textContent = '';
-  }
-
-  if (contBtn) {
-    contBtn.disabled      = !canProceed;
-    contBtn.style.opacity = canProceed ? '1' : '0.4';
-    contBtn.textContent   = totalAgorot > 0
-      ? `המשך לתשלום ${Currency.formatILS(totalAgorot)} ←`
-      : 'המשך לתשלום ←';
-  }
-}
 
 /** Update goal card visual states: selection highlight, checkmark, disabled. */
 function _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, customAgorot, walletTotalAgorot) {
@@ -471,194 +458,6 @@ function _phUpdateGoalCardStates(el, cart, prices, purchasableGoals, customAgoro
   });
 }
 
-// ══════════════════════════════════════════════════════════════
-// GOAL PRICE REVIEW — per-goal price editing BEFORE payment wizard
-// No API calls here. Passes goalContext into Step 2.
-// ══════════════════════════════════════════════════════════════
-
-function _phGoalPriceReview(el, userId, gender, onExit, cartArr, walletTotalAgorot) {
-  // prices: goalId → actual price agorot (editable; starts at targetAgorot)
-  const prices = {};
-  cartArr.forEach(({ goal }) => { prices[goal.goalId] = goal.targetAgorot; });
-
-  const itemRowsHTML = cartArr.map(({ goal }) => `
-    <div style="
-      border:1.5px solid var(--color-border);border-radius:12px;
-      padding:12px;margin-bottom:8px;
-    ">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <div style="font-size:1.4rem;line-height:1;">${goal.emoji}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:800;font-size:0.95rem;color:var(--color-text);">
-            ${_phEsc(goal.title)}
-          </div>
-          ${goal.store
-            ? `<div style="font-size:0.72rem;color:var(--color-text-muted);">📍 ${_phEsc(goal.store)}</div>`
-            : ''}
-        </div>
-      </div>
-
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <div>
-          <span style="font-size:0.75rem;color:var(--color-text-muted);font-weight:600;">מחיר:</span>
-          <span id="gpr-display-${_phEsc(goal.goalId)}"
-            style="font-weight:900;font-size:1.05rem;color:var(--color-text);margin-right:6px;">
-            ${Currency.formatILS(goal.targetAgorot)}
-          </span>
-        </div>
-        <button class="gpr-toggle" data-goal-id="${_phEsc(goal.goalId)}" type="button"
-          style="
-            background:none;border:1.5px solid var(--color-border);border-radius:8px;
-            padding:4px 10px;font-size:0.75rem;font-weight:600;font-family:inherit;
-            color:var(--color-text-muted);cursor:pointer;white-space:nowrap;flex-shrink:0;
-          ">✏️ המחיר השתנה?</button>
-      </div>
-
-      <div id="gpr-editor-${_phEsc(goal.goalId)}" style="display:none;margin-top:8px;">
-        <div style="position:relative;">
-          <input id="gpr-input-${_phEsc(goal.goalId)}"
-            type="number" inputmode="decimal" min="0.01" step="0.01"
-            value="${(goal.targetAgorot / 100).toFixed(2)}"
-            style="
-              width:100%;box-sizing:border-box;
-              padding:10px 44px 10px 16px;
-              font-size:1.15rem;font-weight:800;font-family:inherit;
-              border:2px solid var(--color-border);border-radius:10px;
-              background:var(--color-bg);color:var(--color-text);
-              text-align:left;direction:ltr;
-            ">
-          <span style="
-            position:absolute;left:14px;top:50%;transform:translateY(-50%);
-            font-size:1rem;font-weight:700;color:var(--color-text-muted);pointer-events:none;
-          ">₪</span>
-        </div>
-      </div>
-    </div>`).join('');
-
-  const initTotal = cartArr.reduce((s, c) => s + c.actualPrice, 0);
-
-  el.innerHTML = `
-    <div style="margin-top:4px;">
-      <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">←</button>
-        <span style="${_phHeaderTitleStyle()}">🏆 מחיר לקנייה</span>
-      </div>
-
-      <!-- Wallet balance reference -->
-      <div style="
-        display:flex;justify-content:space-between;align-items:center;
-        padding:10px 14px;background:#EFF6FF;border:1.5px solid #93C5FD;
-        border-radius:12px;margin-bottom:14px;
-      ">
-        <span style="font-size:0.82rem;color:#1E40AF;font-weight:600;">
-          💳 ארנק פיזי
-        </span>
-        <span style="font-weight:900;font-size:1.05rem;color:#1E40AF;">
-          ${Currency.formatILS(walletTotalAgorot)}
-        </span>
-      </div>
-
-      ${itemRowsHTML}
-
-      <!-- Running total -->
-      <div style="
-        padding:12px 14px;background:var(--color-bg-subtle,#F8FAFC);
-        border-radius:12px;margin-bottom:12px;
-        display:flex;justify-content:space-between;align-items:center;
-      ">
-        <span style="font-size:0.9rem;font-weight:700;color:var(--color-text);">
-          סה"כ לתשלום
-        </span>
-        <span id="gpr-total"
-          style="font-weight:900;font-size:1.15rem;color:var(--color-text);">
-          ${Currency.formatILS(initTotal)}
-        </span>
-      </div>
-
-      <div id="gpr-err" style="
-        color:#DC2626;font-size:0.85rem;min-height:1.2em;
-        text-align:center;margin-bottom:8px;
-      "></div>
-
-      <button id="gpr-continue" type="button" style="${_phPrimaryBtnStyle()}">
-        המשך לתשלום מהארנק ←
-      </button>
-    </div>`;
-
-  // Back → Step 0
-  document.getElementById('ph-back').addEventListener('click', () =>
-    _phStep0(el, userId, gender, onExit));
-
-  // "Price changed?" toggles
-  el.querySelectorAll('.gpr-toggle').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const gid      = btn.dataset.goalId;
-      const editorEl = document.getElementById(`gpr-editor-${gid}`);
-      const inputEl  = document.getElementById(`gpr-input-${gid}`);
-      if (!editorEl) return;
-      const isOpen = editorEl.style.display !== 'none';
-      editorEl.style.display = isOpen ? 'none' : '';
-      if (!isOpen && inputEl) { inputEl.focus(); inputEl.select(); }
-    });
-  });
-
-  // Price inputs: update prices + total
-  cartArr.forEach(({ goal }) => {
-    const inputEl   = document.getElementById(`gpr-input-${goal.goalId}`);
-    const displayEl = document.getElementById(`gpr-display-${goal.goalId}`);
-    if (!inputEl) return;
-
-    inputEl.addEventListener('input', () => {
-      const agorot = Currency.parseILSInput((inputEl.value || '').trim());
-      if (agorot && agorot > 0) {
-        prices[goal.goalId] = agorot;
-        if (displayEl) displayEl.textContent = Currency.formatILS(agorot);
-      } else {
-        prices[goal.goalId] = goal.targetAgorot;
-      }
-      _phGprUpdateTotal(prices);
-    });
-  });
-
-  // Continue → wallet payment wizard
-  document.getElementById('gpr-continue').addEventListener('click', () => {
-    // Sync any open editors into prices
-    cartArr.forEach(({ goal }) => {
-      const editorEl = document.getElementById(`gpr-editor-${goal.goalId}`);
-      const inputEl  = document.getElementById(`gpr-input-${goal.goalId}`);
-      if (editorEl && editorEl.style.display !== 'none' && inputEl) {
-        const agorot = Currency.parseILSInput((inputEl.value || '').trim());
-        if (agorot && agorot > 0) prices[goal.goalId] = agorot;
-      }
-    });
-
-    const totalAgorot = Object.values(prices).reduce((s, p) => s + p, 0);
-    if (!totalAgorot || totalAgorot <= 0) {
-      const errEl = document.getElementById('gpr-err');
-      if (errEl) errEl.textContent = 'יש להזין מחיר חוקי.';
-      return;
-    }
-
-    const description = cartArr.map(c => `${c.goal.emoji} ${c.goal.title}`).join(' + ');
-    const goalContext = {
-      goalIds:    cartArr.map(c => c.goal.goalId),
-      goalTitles: cartArr.map(c => `${c.goal.emoji} ${c.goal.title}`),
-      prices:     Object.assign({}, prices), // snapshot
-    };
-    const onBack = () => _phGoalPriceReview(el, userId, gender, onExit, cartArr, walletTotalAgorot);
-    _phStep2(el, userId, gender, onExit, totalAgorot, description, onBack, goalContext);
-  });
-}
-
-/** Update running total in the price review screen. */
-function _phGprUpdateTotal(prices) {
-  const totalEl = document.getElementById('gpr-total');
-  if (totalEl) {
-    totalEl.textContent = Currency.formatILS(
-      Object.values(prices).reduce((s, p) => s + p, 0)
-    );
-  }
-}
 
 // ══════════════════════════════════════════════════════════════
 // STEP 2 — Payment selection (physical wallet)
@@ -695,17 +494,6 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
   const sel = {};
   Currency.DENOMINATIONS.forEach(d => { sel[d.agorot] = 0; });
 
-  // ── Goal context banner ────────────────────────────────────
-  const goalBannerHTML = goalContext ? `
-    <div style="
-      background:#ECFDF5;border:1.5px solid #34D399;
-      border-radius:12px;padding:10px 14px;margin-bottom:12px;
-      font-size:0.82rem;font-weight:700;color:#065F46;
-      display:flex;align-items:center;gap:8px;
-    ">
-      🏆 <span>${_phEsc(goalContext.goalTitles.join(' + '))}</span>
-    </div>` : '';
-
   const sugsHTML = suggestions.map((s, i) => {
     const chipsHTML  = _phDenomChipsRowHTML(s.denomCounts);
     const changeText = s.changeAgorot > 0
@@ -727,64 +515,57 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
       </div>`;
   }).join('');
 
-  // Transfer-row card: each denom = [wallet count] [← btn] [image] [→ btn] [selected count]
-  // RTL layout: wallet (right) ← image → selected (left)
-  // ← = move one coin/bill from wallet into payment
-  // → = return one coin/bill from payment back to wallet
+  // 2-column grid: each denom card = image | label | [wallet N] [→] [←] [sel N]
+  // → = return from payment to wallet  |  ← = take from wallet into payment
   const denomRowsHTML = activeDenoms.map(d => {
     const max    = _phGetCount(walletCounts, d.agorot);
     const isCoin = d.type === 'coin';
     const imgSrc = _phDenomImgSrc(d.agorot);
-    const h      = isCoin ? 40 : 28; // coins round; bills landscape
+    const h      = isCoin ? 52 : 36; // larger images
     return `
       <div style="
-        display:flex;align-items:center;gap:0;
-        padding:10px 6px;
         border:1.5px solid var(--color-border);border-radius:14px;
-        margin-bottom:8px;background:var(--color-bg);
+        padding:10px 6px 8px;background:var(--color-bg);
+        display:flex;flex-direction:column;align-items:center;gap:5px;
       ">
-        <!-- RIGHT: how many are still in wallet -->
-        <div style="flex:1;text-align:center;min-width:0;padding:0 4px;">
-          <div style="font-size:0.7rem;font-weight:700;color:var(--color-text-muted);
-            margin-bottom:2px;white-space:nowrap;">יש לי בארנק</div>
-          <div id="ph-avl-${d.agorot}"
-            style="font-size:1.5rem;font-weight:900;color:var(--color-text);line-height:1;">
-            ${max}
+        ${imgSrc
+          ? `<img src="${imgSrc}"
+              style="height:${h}px;width:auto;max-width:${h + 16}px;display:block;object-fit:contain;"
+              alt="" draggable="false" loading="lazy">`
+          : `<span style="font-size:0.9rem;font-weight:800;">${_phEsc(d.labelHe)}</span>`
+        }
+        <span style="font-size:0.68rem;font-weight:700;color:var(--color-text-muted);
+          white-space:nowrap;">${_phEsc(d.labelHe)}</span>
+        <div style="display:flex;align-items:center;justify-content:center;gap:3px;width:100%;">
+          <div style="flex:1;text-align:center;min-width:0;">
+            <div style="font-size:0.58rem;font-weight:600;color:var(--color-text-muted);">ארנק</div>
+            <div id="ph-avl-${d.agorot}"
+              style="font-size:1.1rem;font-weight:900;color:var(--color-text);line-height:1.1;">
+              ${max}
+            </div>
           </div>
-        </div>
-
-        <!-- → return one from payment back to wallet (RIGHT of image in RTL) -->
-        <button class="ph-ret" id="ph-ret-${d.agorot}" data-denom="${d.agorot}"
-          type="button" aria-label="החזר לארנק"
-          style="${_phTransferBtnStyle(false)}" disabled>→</button>
-
-        <!-- CENTER: coin/bill image + label (visual identity only) -->
-        <div style="
-          display:flex;flex-direction:column;align-items:center;gap:3px;
-          min-width:54px;padding:0 4px;flex-shrink:0;
-        ">
-          ${imgSrc
-            ? `<img src="${imgSrc}"
-                style="height:${h}px;width:auto;max-width:50px;display:block;object-fit:contain;"
-                alt="" draggable="false" loading="lazy">`
-            : `<span style="font-size:0.85rem;font-weight:800;">${_phEsc(d.labelHe)}</span>`
-          }
-          <span style="font-size:0.7rem;font-weight:700;color:var(--color-text-muted);
-            white-space:nowrap;">${_phEsc(d.labelHe)}</span>
-        </div>
-
-        <!-- ← take one from wallet, add to payment (LEFT of image in RTL) -->
-        <button class="ph-add" id="ph-add-${d.agorot}" data-denom="${d.agorot}"
-          type="button" aria-label="העבר לתשלום"
-          style="${_phTransferBtnStyle(true)}" ${max === 0 ? 'disabled' : ''}>←</button>
-
-        <!-- LEFT: how many selected for payment -->
-        <div style="flex:1;text-align:center;min-width:0;padding:0 4px;">
-          <div style="font-size:0.7rem;font-weight:700;color:var(--color-text-muted);
-            margin-bottom:2px;white-space:nowrap;">בחרתי לשלם</div>
-          <div id="ph-sel-${d.agorot}"
-            style="font-size:1.5rem;font-weight:900;color:#16A34A;line-height:1;">
-            0
+          <button class="ph-ret" id="ph-ret-${d.agorot}" data-denom="${d.agorot}"
+            type="button" aria-label="החזר לארנק" style="
+              width:30px;height:30px;border-radius:8px;flex-shrink:0;
+              border:2px solid #FECACA;background:#FEE2E2;
+              font-size:0.85rem;font-weight:700;cursor:pointer;
+              display:flex;align-items:center;justify-content:center;
+              color:#DC2626;font-family:inherit;
+            " disabled>→</button>
+          <button class="ph-add" id="ph-add-${d.agorot}" data-denom="${d.agorot}"
+            type="button" aria-label="העבר לתשלום" style="
+              width:30px;height:30px;border-radius:8px;flex-shrink:0;
+              border:2px solid #BBF7D0;background:#DCFCE7;
+              font-size:0.85rem;font-weight:700;cursor:pointer;
+              display:flex;align-items:center;justify-content:center;
+              color:#15803D;font-family:inherit;
+            " ${max === 0 ? 'disabled' : ''}>←</button>
+          <div style="flex:1;text-align:center;min-width:0;">
+            <div style="font-size:0.58rem;font-weight:600;color:var(--color-text-muted);">תשלום</div>
+            <div id="ph-sel-${d.agorot}"
+              style="font-size:1.1rem;font-weight:900;color:#16A34A;line-height:1.1;">
+              0
+            </div>
           </div>
         </div>
       </div>`;
@@ -806,11 +587,9 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">←</button>
+        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">→</button>
         <span style="${_phHeaderTitleStyle()}">🛒 בחר תשלום</span>
       </div>
-
-      ${goalBannerHTML}
 
       <!-- Price vs wallet -->
       <div style="
@@ -850,7 +629,7 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
           ? `<div style="${_phSectionLabelStyle()}">🪙 בחר מטבעות / שטרות לתשלום</div>`
           : '')}
 
-      ${activeDenoms.length > 0 ? `<div style="margin-bottom:4px;">${denomRowsHTML}</div>` : ''}
+      ${activeDenoms.length > 0 ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">${denomRowsHTML}</div>` : ''}
       ${activeDenoms.length === 0 && canAfford
         ? '<p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:8px;">הארנק ריק.</p>'
         : ''}
@@ -991,7 +770,7 @@ function _phStep3(el, userId, gender, onExit, priceAgorot, description,
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">←</button>
+        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">→</button>
         <span style="${_phHeaderTitleStyle()}">🪙 קיבלת עודף</span>
       </div>
 
@@ -1104,7 +883,7 @@ function _phStep4(el, userId, gender, onExit, priceAgorot, description,
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">←</button>
+        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">→</button>
         <span style="${_phHeaderTitleStyle()}">✓ אישור קנייה</span>
       </div>
 
@@ -1406,12 +1185,19 @@ function _phShowLoading(el, title, onBack) {
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-loading-back" type="button" style="${_phBackBtnStyle()}">←</button>
+        <button id="ph-loading-back" type="button" style="${_phBackBtnStyle()}">→</button>
         <span style="${_phHeaderTitleStyle()}">${_phEsc(title)}</span>
       </div>
-      <p style="text-align:center;color:var(--color-text-muted);padding:28px 0;font-size:0.9rem;">
-        טוען...
-      </p>
+      <div style="text-align:center;padding:28px 0 16px;">
+        <div style="
+          width:36px;height:36px;border-radius:50%;
+          border:3.5px solid var(--color-border,#E2E8F0);
+          border-top-color:var(--color-primary,#0EA5E9);
+          margin:0 auto 10px;
+          animation:ph-spin 0.8s linear infinite;
+        "></div>
+        <p style="color:var(--color-text-muted);font-size:0.88rem;margin:0;">טוען...</p>
+      </div>
     </div>`;
   const back = document.getElementById('ph-loading-back');
   if (back) back.addEventListener('click', onBack);
@@ -1421,7 +1207,7 @@ function _phShowError(el, msg, onBack) {
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-err-back" type="button" style="${_phBackBtnStyle()}">← חזרה</button>
+        <button id="ph-err-back" type="button" style="${_phBackBtnStyle()}">→ חזרה</button>
       </div>
       <div style="
         background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:12px;
@@ -1488,7 +1274,7 @@ function _phDenomChipsRowHTML(denomCounts) {
     if (!src) return;
     const isCoin = d.type === 'coin';
     // Coins are circular — display taller; bills are landscape — display shorter but wider.
-    const h = isCoin ? 34 : 24;
+    const h = isCoin ? 46 : 32;
 
     let imgBlock;
     if (count === 1) {
