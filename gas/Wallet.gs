@@ -513,20 +513,22 @@ function _computeSuggestions(availCounts, priceAgorot) {
     });
   }
 
-  // Suggestion A: many coins (small-first greedy)
+  // Suggestion A: max-coins greedy (small-first)
   if (greedySmall) {
-    var labelA = greedySmall.exact ? 'תשלום מדויק במטבעות קטנות' : 'הרבה מטבעות קטנות';
-    addCandidate(labelA, greedySmall.counts, greedySmall.totalPaid, greedySmall.exact);
+    addCandidate('שימוש בכמה שיותר מטבעות (עדיף)', greedySmall.counts, greedySmall.totalPaid, greedySmall.exact);
   }
 
-  // Suggestion B: fewest pieces (coins preferred)
+  // Suggestion B: fewest pieces, coins preferred
   if (coinOnlyDP) {
     var tB = sumCounts(coinOnlyDP);
-    addCandidate('מטבעות בלבד (מדויק)', coinOnlyDP, tB, true);
+    addCandidate('שימוש בכמה שפחות מטבעות', coinOnlyDP, tB, true);
   } else if (greedyLarge) {
-    var labelB = greedyLarge.exact ? 'הכי מעט פריטים' : 'תשלום עם עודף מינימלי';
-    addCandidate(labelB, greedyLarge.counts, greedyLarge.totalPaid, greedyLarge.exact);
+    addCandidate('שימוש בכמה שפחות מטבעות', greedyLarge.counts, greedyLarge.totalPaid, greedyLarge.exact);
   }
+
+  // Suppress non-exact suggestions when an exact one exists
+  var hasExact = results.some(function(r) { return r.exact; });
+  if (hasExact) results = results.filter(function(r) { return r.exact; });
 
   return results.slice(0, 2);
 }

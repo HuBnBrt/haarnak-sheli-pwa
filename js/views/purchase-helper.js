@@ -62,6 +62,7 @@ async function _phStep0(el, userId, gender, onExit) {
 }
 
 function _phStep0Render(el, userId, gender, onExit, phData) {
+  _phSetCardTitle('מה קונים עכשיו');
   const { savingsAgorot, walletTotalAgorot, purchasableGoals, goals } = phData;
 
   // prices[goalId] = current price agorot (editable, defaults to targetAgorot)
@@ -88,7 +89,7 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
       </div>
       <div style="${_phSectionLabelStyle()}">🏆 מטרות שמוכנות למימוש</div>
       <div id="gp-goals-grid" style="
-        display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;
+        display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px;
       ">
         ${purchasableGoals.map(g => _phGoalCardHTML(g)).join('')}
       </div>`;
@@ -105,11 +106,12 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
       </div>`;
   }
 
+  const continueText = gender === 'f' ? 'המשיכי לתשלום' : 'המשך לתשלום';
+
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="ביטול">→</button>
-        <span style="${_phHeaderTitleStyle()}">🛒 מה קונים עכשיו?</span>
+        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="ביטול"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
       </div>
 
       <!-- Wallet balance pill -->
@@ -124,9 +126,9 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
       <div style="${_phSectionLabelStyle()}">🛒 קונה משהו?</div>
       <div id="gp-custom-rows"></div>
       <button id="gp-add-item" type="button" style="
-        background:none;border:1.5px dashed var(--color-border);border-radius:10px;
-        color:var(--color-text-muted);font-size:0.8rem;font-weight:600;
-        cursor:pointer;padding:5px 12px;margin-bottom:4px;font-family:inherit;
+        background:#EFF6FF;border:1.5px dashed #60A5FA;border-radius:10px;
+        color:#2563EB;font-size:0.82rem;font-weight:700;
+        cursor:pointer;padding:6px 14px;margin-bottom:4px;font-family:inherit;
         display:inline-flex;align-items:center;gap:4px;
       ">+ הוסף פריט נוסף</button>
 
@@ -143,12 +145,12 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
           background:#F0FDF4;border:1.5px solid #86EFAC;
           display:none;flex-direction:column;justify-content:center;
         ">
-          <div style="font-size:0.68rem;font-weight:700;color:#15803D;">סה"כ לתשלום</div>
+          <div id="gp-total-label" style="font-size:0.68rem;font-weight:700;color:#15803D;">סה"כ לתשלום</div>
           <div id="gp-total-amount" style="font-weight:900;font-size:1.05rem;color:#15803D;line-height:1.2;"></div>
         </div>
         <button id="gp-continue" type="button" disabled
-          style="${_phPrimaryBtnStyle()} flex:1.4;width:auto;opacity:0.4;white-space:nowrap;">
-          המשך ←
+          style="${_phPrimaryBtnStyle()} flex:1;width:auto;opacity:0.4;white-space:nowrap;">
+          ${continueText}
         </button>
       </div>
     </div>`;
@@ -301,18 +303,26 @@ function _phStep0Render(el, userId, gender, onExit, phData) {
     const contBtn  = document.getElementById('gp-continue');
 
     if (total > 0) {
+      const overBudget = total > walletTotalAgorot;
       if (stripEl) {
         stripEl.style.display     = 'flex';
-        stripEl.style.background  = total > walletTotalAgorot ? '#FEF2F2' : '#F0FDF4';
-        stripEl.style.borderColor = total > walletTotalAgorot ? '#FCA5A5' : '#86EFAC';
+        stripEl.style.background  = overBudget ? '#FEF2F2' : '#F0FDF4';
+        stripEl.style.borderColor = overBudget ? '#FCA5A5' : '#86EFAC';
       }
+      const labelEl = document.getElementById('gp-total-label');
+      if (labelEl) labelEl.style.color = overBudget ? '#DC2626' : '#15803D';
       if (amountEl) {
         amountEl.textContent = Currency.formatILS(total);
-        amountEl.style.color = total > walletTotalAgorot ? '#DC2626' : '#15803D';
+        amountEl.style.color = overBudget ? '#DC2626' : '#15803D';
       }
       if (errEl) {
-        errEl.textContent = total > walletTotalAgorot
-          ? 'אין מספיק בארנק. אולי צריך לבקש מאבאמא לפדות מהחיסכון.' : '';
+        if (overBudget) {
+          errEl.textContent = savingsAgorot > 0
+            ? 'אין מספיק כסף בארנק. אולי אפשר לבקש מאמא/אבא לפדות מהחיסכון.'
+            : 'אין מספיק כסף בארנק.';
+        } else {
+          errEl.textContent = '';
+        }
       }
     } else {
       if (stripEl) stripEl.style.display = 'none';
@@ -390,6 +400,7 @@ function _phGoalCardHTML(goal) {
       padding:7px 5px 6px;cursor:pointer;
       background:var(--color-bg);position:relative;user-select:none;
       display:flex;flex-direction:column;align-items:center;gap:2px;
+      overflow:hidden;min-width:0;
     ">
       <div class="gp-chk" style="
         display:none;position:absolute;top:4px;left:4px;
@@ -485,132 +496,110 @@ async function _phStep2(el, userId, gender, onExit, priceAgorot, description, on
 }
 
 function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, walletData, onBack, goalContext) {
+  _phSetCardTitle('בחר תשלום');
   const { walletCounts, walletTotalAgorot, savingsAgorot, suggestions, canAfford } = walletData;
   const goBack = onBack || (() => _phStep0(el, userId, gender, onExit));
-
-  const activeDenoms = Currency.DENOMINATIONS.slice().reverse().filter(
-    d => _phGetCount(walletCounts, d.agorot) > 0);
 
   const sel = {};
   Currency.DENOMINATIONS.forEach(d => { sel[d.agorot] = 0; });
 
-  const sugsHTML = suggestions.map((s, i) => {
-    const chipsHTML  = _phDenomChipsRowHTML(s.denomCounts);
-    const changeText = s.changeAgorot > 0
-      ? ` · עודף: ${Currency.formatILS(s.changeAgorot)}` : '';
-    return `
+  const activeDenoms = Currency.DENOMINATIONS.slice().reverse().filter(
+    d => _phGetCount(walletCounts, d.agorot) > 0);
+
+  // A. Suggestions HTML
+  const sugsHTML = suggestions.length > 0 ? `
+    <div style="${_phSectionLabelStyle()}">💡 הצעות לתשלום</div>
+    ${suggestions.map((s, i) => `
       <div class="ph-sug" data-sug="${i}" style="
         border:2px solid var(--color-border);border-radius:14px;
-        padding:11px 14px;margin-bottom:9px;cursor:pointer;
+        padding:10px 14px;margin-bottom:8px;cursor:pointer;
         background:var(--color-bg);
       ">
-        <div style="font-size:0.78rem;color:var(--color-text-muted);margin-bottom:4px;font-weight:600;">
+        <div style="font-size:0.75rem;color:var(--color-text-muted);margin-bottom:4px;font-weight:600;">
           💡 ${_phEsc(s.label)}
         </div>
-        ${chipsHTML}
-        <div style="font-size:0.8rem;margin-top:6px;font-weight:700;
+        ${_phDenomChipsRowHTML(s.denomCounts)}
+        <div style="font-size:0.78rem;margin-top:5px;font-weight:700;
           color:${s.exact ? '#16A34A' : '#2563EB'};">
-          ${s.exact ? '✓ תשלום מדויק' : 'עם עודף'}${_phEsc(changeText)}
+          ${s.exact ? '✓ תשלום מדויק' : `עם עודף · ${Currency.formatILS(s.changeAgorot)}`}
         </div>
-      </div>`;
-  }).join('');
+      </div>`).join('')}
+    <div style="text-align:center;font-size:0.72rem;color:var(--color-text-muted);
+      font-weight:600;margin:8px 0 10px;letter-spacing:0.04em;">— או בנה ידנית —</div>
+  ` : '';
 
-  // 2-column grid: each denom card = image | label | [wallet N] [→] [←] [sel N]
-  // → = return from payment to wallet  |  ← = take from wallet into payment
-  const denomRowsHTML = activeDenoms.map(d => {
-    const max    = _phGetCount(walletCounts, d.agorot);
-    const isCoin = d.type === 'coin';
-    const imgSrc = _phDenomImgSrc(d.agorot);
-    const h      = isCoin ? 52 : 36; // larger images
-    return `
-      <div style="
-        border:1.5px solid var(--color-border);border-radius:14px;
-        padding:10px 6px 8px;background:var(--color-bg);
-        display:flex;flex-direction:column;align-items:center;gap:5px;
-      ">
-        ${imgSrc
-          ? `<img src="${imgSrc}"
-              style="height:${h}px;width:auto;max-width:${h + 16}px;display:block;object-fit:contain;"
-              alt="" draggable="false" loading="lazy">`
-          : `<span style="font-size:0.9rem;font-weight:800;">${_phEsc(d.labelHe)}</span>`
-        }
-        <span style="font-size:0.68rem;font-weight:700;color:var(--color-text-muted);
-          white-space:nowrap;">${_phEsc(d.labelHe)}</span>
-        <div style="display:flex;align-items:center;justify-content:center;gap:3px;width:100%;">
-          <div style="flex:1;text-align:center;min-width:0;">
-            <div style="font-size:0.58rem;font-weight:600;color:var(--color-text-muted);">ארנק</div>
-            <div id="ph-avl-${d.agorot}"
-              style="font-size:1.1rem;font-weight:900;color:var(--color-text);line-height:1.1;">
-              ${max}
+  // B. Composer — tap to add one of each denomination
+  const composerHTML = activeDenoms.length > 0 ? `
+    <div style="${_phSectionLabelStyle()}">🪙 הרכבה עצמית</div>
+    <div id="ph-composer" style="
+      display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;
+    ">
+      ${activeDenoms.map(d => {
+        const isCoin = d.type === 'coin';
+        const src    = _phDenomImgSrc(d.agorot);
+        const h      = isCoin ? 52 : 38;
+        const avail  = _phGetCount(walletCounts, d.agorot);
+        return `
+          <button class="ph-comp-btn" data-denom="${d.agorot}" type="button" style="
+            border:1.5px solid var(--color-border);border-radius:14px;
+            padding:8px 4px 6px;background:var(--color-bg);cursor:pointer;
+            display:flex;flex-direction:column;align-items:center;gap:3px;
+            font-family:inherit;
+          ">
+            ${src
+              ? `<img src="${src}" style="height:${h}px;width:auto;display:block;object-fit:contain;"
+                  alt="" draggable="false" loading="lazy">`
+              : `<span style="font-size:0.9rem;font-weight:800;">${_phEsc(d.labelHe)}</span>`
+            }
+            <span style="font-size:0.65rem;font-weight:700;color:var(--color-text-muted);
+              white-space:nowrap;">${_phEsc(d.labelHe)}</span>
+            <div id="ph-comp-avl-${d.agorot}" style="font-size:0.72rem;font-weight:800;color:#0EA5E9;">
+              יש: <span>${avail}</span>
             </div>
-          </div>
-          <button class="ph-ret" id="ph-ret-${d.agorot}" data-denom="${d.agorot}"
-            type="button" aria-label="החזר לארנק" style="
-              width:30px;height:30px;border-radius:8px;flex-shrink:0;
-              border:2px solid #FECACA;background:#FEE2E2;
-              font-size:0.85rem;font-weight:700;cursor:pointer;
-              display:flex;align-items:center;justify-content:center;
-              color:#DC2626;font-family:inherit;
-            " disabled>→</button>
-          <button class="ph-add" id="ph-add-${d.agorot}" data-denom="${d.agorot}"
-            type="button" aria-label="העבר לתשלום" style="
-              width:30px;height:30px;border-radius:8px;flex-shrink:0;
-              border:2px solid #BBF7D0;background:#DCFCE7;
-              font-size:0.85rem;font-weight:700;cursor:pointer;
-              display:flex;align-items:center;justify-content:center;
-              color:#15803D;font-family:inherit;
-            " ${max === 0 ? 'disabled' : ''}>←</button>
-          <div style="flex:1;text-align:center;min-width:0;">
-            <div style="font-size:0.58rem;font-weight:600;color:var(--color-text-muted);">תשלום</div>
-            <div id="ph-sel-${d.agorot}"
-              style="font-size:1.1rem;font-weight:900;color:#16A34A;line-height:1.1;">
-              0
-            </div>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
+          </button>`;
+      }).join('')}
+    </div>
+  ` : (activeDenoms.length === 0 && canAfford
+    ? '<p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:8px;">הארנק ריק.</p>'
+    : '');
 
+  // C. Insufficient wallet warning
   const insuffHTML = !canAfford ? `
     <div style="
       background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:12px;
-      padding:12px;margin-bottom:12px;font-size:0.88rem;color:#92400E;line-height:1.55;
+      padding:12px;margin-bottom:12px;font-size:0.85rem;color:#92400E;line-height:1.55;
     ">
-      ⚠ הארנק הפיזי (${Currency.formatILS(walletTotalAgorot)}) לא מספיק לשלם
-      ${Currency.formatILS(priceAgorot)}.
+      ⚠ הארנק הפיזי (${Currency.formatILS(walletTotalAgorot)}) לא מספיק לשלם ${Currency.formatILS(priceAgorot)}.
       ${savingsAgorot > 0
-        ? `<br>יש לך <strong>${Currency.formatILS(savingsAgorot)}</strong> בחיסכון —
-           אפשר לבקש מאמא ואבא לעזור.`
+        ? `<br>יש לך <strong>${Currency.formatILS(savingsAgorot)}</strong> בחיסכון — אפשר לבקש מאמא ואבא לעזור.`
         : ''}
     </div>` : '';
 
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">→</button>
-        <span style="${_phHeaderTitleStyle()}">🛒 בחר תשלום</span>
+        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
       </div>
 
-      <!-- Price vs wallet -->
+      <!-- A. Summary -->
       <div style="
         display:flex;justify-content:space-between;align-items:center;
-        padding:12px 14px;background:var(--color-bg-subtle,#F8FAFC);
+        padding:10px 14px;background:var(--color-bg-subtle,#F8FAFC);
         border-radius:12px;margin-bottom:12px;
       ">
         <div>
-          <div style="font-size:0.72rem;color:var(--color-text-muted);font-weight:600;margin-bottom:2px;">
+          <div style="font-size:0.7rem;color:var(--color-text-muted);font-weight:600;margin-bottom:1px;">
             ${goalContext ? 'סה"כ לתשלום' : 'מחיר'}
           </div>
-          <div style="font-size:1.5rem;font-weight:900;color:var(--color-text);">
+          <div style="font-size:1.4rem;font-weight:900;color:var(--color-text);">
             ${Currency.formatILS(priceAgorot)}
           </div>
         </div>
         <div style="text-align:left;">
-          <div style="font-size:0.72rem;color:var(--color-text-muted);font-weight:600;margin-bottom:2px;">
-            בארנק שלך
+          <div style="font-size:0.7rem;color:var(--color-text-muted);font-weight:600;margin-bottom:1px;">
+            בארנק
           </div>
-          <div style="font-size:1.1rem;font-weight:800;
-            color:${canAfford ? '#0EA5E9' : '#DC2626'};">
+          <div style="font-size:1rem;font-weight:800;color:${canAfford ? '#0EA5E9' : '#DC2626'};">
             ${Currency.formatILS(walletTotalAgorot)}
           </div>
         </div>
@@ -618,72 +607,43 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
 
       ${insuffHTML}
 
-      ${suggestions.length > 0 ? `
-        <div style="${_phSectionLabelStyle()}">💡 הצעות תשלום</div>
-        ${sugsHTML}
-        <div style="
-          text-align:center;font-size:0.75rem;color:var(--color-text-muted);
-          font-weight:600;margin:12px 0 8px;letter-spacing:0.04em;
-        ">— או בחר ידנית —</div>
-      ` : (activeDenoms.length > 0
-          ? `<div style="${_phSectionLabelStyle()}">🪙 בחר מטבעות / שטרות לתשלום</div>`
-          : '')}
+      <!-- B. Suggestions -->
+      ${sugsHTML}
 
-      ${activeDenoms.length > 0 ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">${denomRowsHTML}</div>` : ''}
-      ${activeDenoms.length === 0 && canAfford
-        ? '<p style="font-size:0.85rem;color:var(--color-text-muted);margin-top:8px;">הארנק ריק.</p>'
-        : ''}
+      <!-- C. Manual composer -->
+      ${composerHTML}
 
-      <!-- Payment status strip -->
-      <div style="
-        margin-top:14px;padding:12px 14px;
-        background:var(--color-bg-subtle,#F8FAFC);border-radius:12px;
-      ">
-        <div style="
-          display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;
-        ">
-          <span style="font-size:0.8rem;font-weight:700;color:var(--color-text-muted);">
-            בחרתי לשלם
-          </span>
-          <span id="ph-ptotal"
-            style="font-size:1.4rem;font-weight:900;color:var(--color-text);">
-            ${Currency.formatILS(0)}
-          </span>
-        </div>
-        <div style="
-          display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;
-        ">
-          <span style="font-size:0.72rem;color:var(--color-text-muted);">
-            נשאר בארנק אחרי הבחירה
-          </span>
-          <span id="ph-wallet-rem"
-            style="font-size:0.82rem;font-weight:700;color:var(--color-text-muted);">
-            ${Currency.formatILS(walletTotalAgorot)}
-          </span>
-        </div>
-        <div id="ph-pstatus" style="font-size:0.88rem;min-height:1.3em;text-align:center;margin-top:2px;"></div>
-      </div>
+      <!-- D. Accumulator — what you're paying with -->
+      <div style="${_phSectionLabelStyle()}">💳 בחרתי לשלם</div>
+      <div id="ph-acc" style="
+        min-height:64px;border:1.5px dashed var(--color-border);border-radius:14px;
+        padding:10px;margin-bottom:10px;
+      "></div>
+
+      <!-- Status -->
+      <div id="ph-pstatus" style="font-size:0.88rem;min-height:1.4em;text-align:center;margin-bottom:10px;"></div>
 
       <button id="ph-next" type="button" disabled
-        style="${_phPrimaryBtnStyle()} margin-top:12px;opacity:0.45;">
-        שילמתי לחנות ←
+        style="${_phPrimaryBtnStyle()} opacity:0.45;">
+        שילמתי לחנות
       </button>
     </div>`;
 
   document.getElementById('ph-back').addEventListener('click', goBack);
 
-  // Suggestion cards — load suggestion into transfer UI
+  // Initial accumulator render + status
+  _phSyncPayUI(el, sel, walletCounts, priceAgorot, walletTotalAgorot);
+
+  // Suggestion cards: tap to fill accumulator
   el.querySelectorAll('.ph-sug').forEach(card => {
     card.addEventListener('click', () => {
       const idx = parseInt(card.dataset.sug, 10);
       const sug = suggestions[idx];
-
       Currency.DENOMINATIONS.forEach(d => { sel[d.agorot] = 0; });
       Object.entries(sug.denomCounts).forEach(([dk, c]) => {
         sel[parseInt(dk, 10)] = c;
       });
-      _phSyncTransferUI(el, sel, walletCounts);
-      _phUpdatePayStatus(el, sel, priceAgorot, walletTotalAgorot);
+      _phSyncPayUI(el, sel, walletCounts, priceAgorot, walletTotalAgorot);
       el.querySelectorAll('.ph-sug').forEach((c, ci) => {
         c.style.borderColor = ci === idx ? '#0EA5E9' : '';
         c.style.background  = ci === idx ? '#EFF6FF' : '';
@@ -691,36 +651,24 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
     });
   });
 
-  // Transfer buttons: ← move from wallet to payment, → return from payment to wallet
-  el.querySelectorAll('.ph-add').forEach(btn => {
+  // Composer: tap to add one
+  el.querySelectorAll('.ph-comp-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const denom = parseInt(btn.dataset.denom, 10);
-      const max   = _phGetCount(walletCounts, denom);
-      if ((sel[denom] || 0) >= max) return;
+      const avail = _phGetCount(walletCounts, denom);
+      if ((sel[denom] || 0) >= avail) return;
       sel[denom] = (sel[denom] || 0) + 1;
-      _phSyncTransferUI(el, sel, walletCounts);
-      _phUpdatePayStatus(el, sel, priceAgorot, walletTotalAgorot);
+      _phSyncPayUI(el, sel, walletCounts, priceAgorot, walletTotalAgorot);
+      // Clear suggestion highlight on manual interaction
       el.querySelectorAll('.ph-sug').forEach(c => { c.style.borderColor = ''; c.style.background = ''; });
     });
   });
 
-  el.querySelectorAll('.ph-ret').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const denom = parseInt(btn.dataset.denom, 10);
-      if ((sel[denom] || 0) <= 0) return;
-      sel[denom] = (sel[denom] || 0) - 1;
-      _phSyncTransferUI(el, sel, walletCounts);
-      _phUpdatePayStatus(el, sel, priceAgorot, walletTotalAgorot);
-      el.querySelectorAll('.ph-sug').forEach(c => { c.style.borderColor = ''; c.style.background = ''; });
-    });
-  });
-
-  // Proceed
+  // Next button
   document.getElementById('ph-next').addEventListener('click', () => {
     const paidCounts   = _phCleanCounts(sel);
     const paidTotal    = _phCountsSum(paidCounts);
     const changeAgorot = paidTotal - priceAgorot;
-
     if (changeAgorot === 0) {
       _phStep4(el, userId, gender, onExit, priceAgorot, description,
         paidCounts, {}, 0, walletData, goalContext);
@@ -737,6 +685,7 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
 
 function _phStep3(el, userId, gender, onExit, priceAgorot, description,
                   paidCounts, paidTotal, expectedChange, walletData, onBack, goalContext) {
+  _phSetCardTitle('🪙 קיבלת עודף');
   const goBack = onBack || (() => _phStep0(el, userId, gender, onExit));
   const chg    = {};
   Currency.DENOMINATIONS.forEach(d => { chg[d.agorot] = 0; });
@@ -770,8 +719,7 @@ function _phStep3(el, userId, gender, onExit, priceAgorot, description,
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">→</button>
-        <span style="${_phHeaderTitleStyle()}">🪙 קיבלת עודף</span>
+        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
       </div>
 
       <div style="
@@ -850,6 +798,7 @@ function _phStep3(el, userId, gender, onExit, priceAgorot, description,
 
 function _phStep4(el, userId, gender, onExit, priceAgorot, description,
                   paidCounts, changeCounts, changeAgorot, walletData, goalContext) {
+  _phSetCardTitle('✓ אישור קנייה');
   const paidTotal  = _phCountsSum(paidCounts);
   const enterLabel = gender === 'f' ? 'הכניסי לארנק האמיתי ✓' : 'הכנס לארנק האמיתי ✓';
 
@@ -883,8 +832,7 @@ function _phStep4(el, userId, gender, onExit, priceAgorot, description,
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה">→</button>
-        <span style="${_phHeaderTitleStyle()}">✓ אישור קנייה</span>
+        <button id="ph-back" type="button" style="${_phBackBtnStyle()}" aria-label="חזרה"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
       </div>
 
       ${goalSummaryHTML}
@@ -1119,34 +1067,113 @@ function _phUpdateChangeStatus(el, chg, expectedChange) {
 }
 
 /**
- * Syncs all transfer-row cards after sel[] changes (via button press or suggestion load).
- * Updates available counts, selected counts, and ← / → button disabled states.
+ * Syncs composer available counts, re-renders the accumulator, and updates
+ * pay status + next button. Called after any sel[] mutation in Step 2.
  */
-function _phSyncTransferUI(el, sel, walletCounts) {
+function _phSyncPayUI(el, sel, walletCounts, priceAgorot, walletTotalAgorot) {
+  // Update composer "יש:" counts and dim unavailable buttons
   Currency.DENOMINATIONS.forEach(d => {
-    const max      = _phGetCount(walletCounts, d.agorot);
-    const selected = sel[d.agorot] || 0;
-    const avail    = max - selected;
-
-    const avlEl  = document.getElementById(`ph-avl-${d.agorot}`);
-    const selEl  = document.getElementById(`ph-sel-${d.agorot}`);
-    const addBtn = document.getElementById(`ph-add-${d.agorot}`);
-    const retBtn = document.getElementById(`ph-ret-${d.agorot}`);
-
-    if (avlEl) avlEl.textContent = avail;
-    if (selEl) selEl.textContent = selected;
-
-    if (addBtn) {
-      const canAdd        = avail > 0;
-      addBtn.disabled     = !canAdd;
-      addBtn.style.opacity = canAdd ? '1' : '0.3';
-    }
-    if (retBtn) {
-      const canRet        = selected > 0;
-      retBtn.disabled     = !canRet;
-      retBtn.style.opacity = canRet ? '1' : '0.3';
+    const avlEl = document.getElementById(`ph-comp-avl-${d.agorot}`);
+    if (!avlEl) return;
+    const avail = _phGetCount(walletCounts, d.agorot) - (sel[d.agorot] || 0);
+    const span  = avlEl.querySelector('span');
+    if (span) span.textContent = avail;
+    const btn = avlEl.closest('.ph-comp-btn');
+    if (btn) {
+      btn.disabled      = avail <= 0;
+      btn.style.opacity = avail <= 0 ? '0.35' : '1';
     }
   });
+
+  // Re-render accumulator
+  const accEl = document.getElementById('ph-acc');
+  if (accEl) {
+    accEl.innerHTML = _phAccumulatorHTML(sel);
+    // Wire tap-to-remove on each chip
+    accEl.querySelectorAll('.ph-acc-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const denom = parseInt(chip.dataset.denom, 10);
+        if ((sel[denom] || 0) > 0) sel[denom]--;
+        _phSyncPayUI(el, sel, walletCounts, priceAgorot, walletTotalAgorot);
+        // Clear suggestion highlight
+        el.querySelectorAll('.ph-sug').forEach(c => { c.style.borderColor = ''; c.style.background = ''; });
+      });
+    });
+  }
+
+  // Update status + next button
+  const total    = _phSelTotal(sel);
+  const diff     = total - priceAgorot;
+  const statusEl = document.getElementById('ph-pstatus');
+  const nextBtn  = document.getElementById('ph-next');
+  if (!statusEl || !nextBtn) return;
+
+  if (total === 0) {
+    statusEl.innerHTML    = '<span style="color:var(--color-text-muted);font-size:0.82rem;">הוסף מטבעות ושטרות לתשלום</span>';
+    nextBtn.disabled      = true;
+    nextBtn.style.opacity = '0.45';
+  } else if (diff < 0) {
+    statusEl.innerHTML    = `<span style="color:#DC2626;">חסרים עוד ${Currency.formatILS(-diff)}</span>`;
+    nextBtn.disabled      = true;
+    nextBtn.style.opacity = '0.45';
+  } else if (diff === 0) {
+    statusEl.innerHTML    = `<span style="color:#16A34A;font-weight:800;">✓ תשלום מדויק!</span>`;
+    nextBtn.disabled      = false;
+    nextBtn.style.opacity = '1';
+  } else {
+    statusEl.innerHTML    = `<span style="color:#2563EB;font-weight:700;">תקבל עודף ${Currency.formatILS(diff)}</span>`;
+    nextBtn.disabled      = false;
+    nextBtn.style.opacity = '1';
+  }
+}
+
+/**
+ * Renders the "D. בחרתי לשלם" accumulator as tappable denomination chips.
+ * Each chip = one denomination group; tap to remove one unit.
+ */
+function _phAccumulatorHTML(sel) {
+  const chips = [];
+  Currency.DENOMINATIONS.slice().reverse().forEach(d => {
+    const count = sel[d.agorot] || 0;
+    if (count <= 0) return;
+    const src    = _phDenomImgSrc(d.agorot);
+    const isCoin = d.type === 'coin';
+    const h      = isCoin ? 52 : 38;
+    chips.push(`
+      <button class="ph-acc-chip" data-denom="${d.agorot}" type="button" style="
+        background:none;border:1.5px solid #86EFAC;border-radius:12px;
+        padding:5px 8px;cursor:pointer;font-family:inherit;
+        display:inline-flex;flex-direction:column;align-items:center;gap:2px;
+        position:relative;
+      ">
+        ${src
+          ? `<img src="${src}" style="height:${h}px;width:auto;display:block;object-fit:contain;"
+              alt="" draggable="false" loading="lazy">`
+          : `<span style="font-size:0.9rem;font-weight:800;">${_phEsc(d.labelHe)}</span>`
+        }
+        ${count > 1 ? `<span style="
+          position:absolute;top:-5px;left:-5px;
+          min-width:18px;height:18px;
+          background:#1D4ED8;color:#fff;
+          font-size:0.58rem;font-weight:900;
+          border-radius:9px;padding:0 3px;
+          display:flex;align-items:center;justify-content:center;
+          font-family:inherit;line-height:1;
+        ">×${count}</span>` : ''}
+        <span style="font-size:0.55rem;color:#DC2626;font-weight:700;line-height:1;">✕ הסר</span>
+      </button>`);
+  });
+
+  if (!chips.length) return `<div style="
+    text-align:center;color:var(--color-text-muted);font-size:0.82rem;padding:10px 0;
+  ">טפול להוסיף מטבעות ושטרות</div>`;
+
+  const total = _phSelTotal(sel);
+  return `
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">${chips.join('')}</div>
+    <div style="font-size:0.78rem;font-weight:700;color:var(--color-text-muted);text-align:left;direction:ltr;">
+      סה"כ: ${Currency.formatILS(total)}
+    </div>`;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1182,11 +1209,11 @@ function _phResolveDenomCount(counts, agorot) {
 }
 
 function _phShowLoading(el, title, onBack) {
+  _phSetCardTitle(title);
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-loading-back" type="button" style="${_phBackBtnStyle()}">→</button>
-        <span style="${_phHeaderTitleStyle()}">${_phEsc(title)}</span>
+        <button id="ph-loading-back" type="button" style="${_phBackBtnStyle()}"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
       </div>
       <div style="text-align:center;padding:28px 0 16px;">
         <div style="
@@ -1196,7 +1223,7 @@ function _phShowLoading(el, title, onBack) {
           margin:0 auto 10px;
           animation:ph-spin 0.8s linear infinite;
         "></div>
-        <p style="color:var(--color-text-muted);font-size:0.88rem;margin:0;">טוען...</p>
+        <p style="color:var(--color-text-muted);font-size:0.88rem;margin:0;">טוען<span class="ld-d">.</span><span class="ld-d">.</span><span class="ld-d">.</span></p>
       </div>
     </div>`;
   const back = document.getElementById('ph-loading-back');
@@ -1207,7 +1234,7 @@ function _phShowError(el, msg, onBack) {
   el.innerHTML = `
     <div style="margin-top:4px;">
       <div style="${_phHeaderStyle()}">
-        <button id="ph-err-back" type="button" style="${_phBackBtnStyle()}">→ חזרה</button>
+        <button id="ph-err-back" type="button" style="${_phBackBtnStyle()}"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
       </div>
       <div style="
         background:#FEF2F2;border:1.5px solid #FCA5A5;border-radius:12px;
@@ -1224,6 +1251,12 @@ function _phEsc(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/** Update the outer wallet card section title (mirrors _wdSetCardTitle in wallet-display.js). */
+function _phSetCardTitle(title) {
+  const el = document.getElementById('wallet-section-title');
+  if (el) el.textContent = title;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1274,18 +1307,13 @@ function _phDenomChipsRowHTML(denomCounts) {
     if (!src) return;
     const isCoin = d.type === 'coin';
     // Coins are circular — display taller; bills are landscape — display shorter but wider.
-    const h = isCoin ? 46 : 32;
+    const h = isCoin ? 52 : 38;
 
     let imgBlock;
     if (count === 1) {
       imgBlock = `<img src="${src}"
         style="height:${h}px;width:auto;display:block;object-fit:contain;"
         alt="" draggable="false" loading="lazy">`;
-    } else if (count === 2 && isCoin) {
-      const img = `<img src="${src}"
-        style="height:${h}px;width:auto;display:block;object-fit:contain;"
-        alt="" draggable="false" loading="lazy">`;
-      imgBlock = `<div style="display:flex;gap:2px;">${img}${img}</div>`;
     } else {
       imgBlock = `
         <div style="position:relative;display:inline-block;">

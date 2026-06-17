@@ -33,6 +33,7 @@ window.WalletDisplay = {
     try {
       const { data } = await API.callGASWithFallback('getWalletDenominations', { userId });
       el.innerHTML = _buildReadOnlyHTML(data.counts, data.totalAgorot);
+      _wdSetCardTitle('יש לי בארנק');
 
       // Wire "ספרתי את הארנק" button
       const btn = el.querySelector('#wd-count-btn');
@@ -88,8 +89,8 @@ function _buildReadOnlyHTML(counts, totalAgorot) {
     const bg      = hasVal ? (isCoin ? '#FEF9C3' : '#ECFDF5') : 'var(--color-bg-subtle,#F8FAFC)';
     const border  = hasVal ? (isCoin ? '#D97706' : '#34D399') : 'var(--color-border)';
     const textCol = hasVal ? (isCoin ? '#92400E' : '#065F46') : 'var(--color-text-muted)';
-    // Larger images: coins 62px, bills 46px
-    const imgH    = isCoin ? 62 : 46;
+    // Larger images: coins 62px, bills 56px (closer to coin visual size)
+    const imgH    = isCoin ? 62 : 56;
     const imgHTML = _wdDenomImg(agorot, isCoin, imgH);
 
     return `
@@ -106,9 +107,9 @@ function _buildReadOnlyHTML(counts, totalAgorot) {
         </div>
         <!-- Info: second in HTML = leftmost in RTL row -->
         <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
-          <div style="font-weight:900;font-size:2rem;color:${textCol};line-height:1;">${count}</div>
-          <div style="font-size:0.72rem;font-weight:700;color:${textCol};white-space:nowrap;">${_wdEsc(d.labelHe)}</div>
-          ${hasVal ? `<div style="font-size:0.62rem;color:${textCol};opacity:0.72;white-space:nowrap;">= ${Currency.formatILS(subTotal)}</div>` : ''}
+          <div style="font-size:0.9rem;font-weight:800;color:${textCol};white-space:nowrap;line-height:1.2;">${_wdEsc(d.labelHe)}</div>
+          <div style="font-weight:900;font-size:1.5rem;color:${textCol};line-height:1.15;">${count}</div>
+          ${hasVal ? `<div style="font-size:0.78rem;font-weight:700;color:${textCol};white-space:nowrap;">= ${Currency.formatILS(subTotal)}</div>` : ''}
         </div>
       </div>`;
   }
@@ -258,13 +259,14 @@ function _renderCountEditor(el, userId) {
 }
 
 async function _renderEditorShell(el, userId, existingCounts) {
+  _wdSetCardTitle('🪙 עדכון הארנק');
   // Show loading shell while we fetch current counts (if not passed in)
   el.innerHTML = `
     <div style="margin-top: 4px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
         <button id="wd-editor-back" type="button" aria-label="חזרה"
           style="background:none;border:none;font-size:1.5rem;font-weight:900;cursor:pointer;
-            padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;">→</button>
+            padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
         <div style="font-size:1.1rem;font-weight:800;color:var(--color-text);">🪙 עדכון תכולת הארנק שלי</div>
       </div>
       ${_wdSpinnerHTML('טוען...')}
@@ -310,14 +312,14 @@ function _renderEditorForm(el, userId, counts) {
       <div style="
         background:${bg};border:1.5px solid ${border};border-radius:14px;
         padding:10px 6px 8px;display:flex;flex-direction:column;
-        align-items:center;gap:6px;
+        align-items:center;gap:4px;
       ">
         <!-- Large image -->
         <div style="height:${imgH}px;display:flex;align-items:center;justify-content:center;">
           ${imgHTML || `<span style="font-size:1.4rem;">${icon}</span>`}
         </div>
         <!-- Label -->
-        <div style="font-size:0.72rem;font-weight:700;color:${color};white-space:nowrap;">
+        <div style="font-size:0.82rem;font-weight:800;color:${color};white-space:nowrap;">
           ${_wdEsc(d.labelHe)}
         </div>
         <!-- Stepper: compact − / count / + -->
@@ -342,19 +344,20 @@ function _renderEditorForm(el, userId, counts) {
               flex-shrink:0;">+</button>
         </div>
         <!-- Subtotal -->
-        <div id="wd-sub-${d.agorot}" style="font-size:0.62rem;color:${color};opacity:0.75;min-height:0.9em;">
+        <div id="wd-sub-${d.agorot}" style="font-size:0.72rem;font-weight:600;color:${color};min-height:0.9em;">
           ${count > 0 ? '= ' + Currency.formatILS(count * d.agorot) : ''}
         </div>
       </div>`;
   }
 
+  _wdSetCardTitle('🪙 עדכון הארנק');
   el.innerHTML = `
     <div style="margin-top:4px;">
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
         <button id="wd-editor-back" type="button" aria-label="חזרה"
           style="background:none;border:none;font-size:1.5rem;font-weight:900;cursor:pointer;
-            padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;">→</button>
+            padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
         <div style="font-size:1.1rem;font-weight:800;color:var(--color-text);">🪙 עדכון תכולת הארנק שלי</div>
       </div>
 
@@ -389,7 +392,7 @@ function _renderEditorForm(el, userId, counts) {
         onmousedown="this.style.transform='scale(0.97)'"
         onmouseup="this.style.transform=''"
         onmouseleave="this.style.transform=''">
-        ✓ שמרתי — זה הארנק שלי!
+        לעדכן תכולת הארנק שלי
       </button>
     </div>`;
 
@@ -440,7 +443,7 @@ function _renderEditorForm(el, userId, counts) {
     } catch (err) {
       statusEl.style.color = 'var(--color-danger)';
       statusEl.textContent = 'שגיאה: ' + _wdEsc(err.message);
-      saveBtn.textContent  = '✓ שמרתי — זה הארנק שלי!';
+      saveBtn.textContent  = 'לעדכן תכולת הארנק שלי';
       saveBtn.disabled     = false;
     }
   });
@@ -525,6 +528,12 @@ function _wdSpinnerHTML(msg) {
       "></div>
       <p style="color:var(--color-text-muted);font-size:0.88rem;margin:0;">${_wdEsc(msg || 'טוען...')}</p>
     </div>`;
+}
+
+/** Update the outer wallet card section title (shared with purchase-helper). */
+function _wdSetCardTitle(title) {
+  const el = document.getElementById('wallet-section-title');
+  if (el) el.textContent = title;
 }
 
 function _wdEsc(str) {

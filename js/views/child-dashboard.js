@@ -68,8 +68,8 @@ Views.ChildDashboard = {
         </div>
 
         <!-- ── Physical wallet (Phase 2) ─────────────────── -->
-        <div class="card card-accent" style="margin-bottom: 12px;">
-          <div class="section-title" style="margin-bottom: 6px;">
+        <div class="card" style="margin-bottom: 12px;">
+          <div class="section-title" id="wallet-section-title" style="margin-bottom: 6px;">
             ${I18n.t('account.wallet')}
           </div>
           <div id="wallet-content"></div>

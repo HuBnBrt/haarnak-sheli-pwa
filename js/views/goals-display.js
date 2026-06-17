@@ -120,6 +120,42 @@ function _gdRenderList(el, userId, savingsAgorot, walletAgorot, goals) {
     );
   });
 
+  // "✏️ שם" toggle — show/hide inline name editor
+  el.addEventListener('click', e => {
+    const btn = e.target.closest('.gd-change-name-btn');
+    if (!btn) return;
+    const gid = btn.dataset.goalId;
+    const editorEl = document.getElementById(`gd-tile-name-editor-${gid}`);
+    if (!editorEl) return;
+    const isOpen = editorEl.style.display !== 'none';
+    editorEl.style.display = isOpen ? 'none' : '';
+    if (!isOpen) {
+      const inp = editorEl.querySelector('input');
+      if (inp) { inp.focus(); inp.select(); }
+    }
+  });
+
+  // Name save button — update title via API then re-render
+  el.addEventListener('click', async e => {
+    const btn = e.target.closest('.gd-name-save-btn');
+    if (!btn || btn.disabled) return;
+    const gid   = btn.dataset.goalId;
+    const inp   = document.querySelector(`.gd-name-input[data-goal-id="${gid}"]`);
+    if (!inp) return;
+    const title = (inp.value || '').trim();
+    if (!title) { inp.style.borderColor = '#FCA5A5'; inp.focus(); return; }
+    btn.disabled    = true;
+    btn.textContent = 'שומר...';
+    try {
+      await API.callGASWithFallback('updateGoal', { userId, goalId: gid, title });
+      await GoalsDisplay.render(el, userId, savingsAgorot, walletAgorot);
+    } catch (err) {
+      btn.disabled    = false;
+      btn.textContent = '✓ שמור שם';
+      inp.style.borderColor = '#FCA5A5';
+    }
+  });
+
   // "✏️ מחיר" toggle — show/hide inline price editor
   el.addEventListener('click', e => {
     const btn = e.target.closest('.gd-change-price-btn');
@@ -184,14 +220,16 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
   // §9b: purchase readiness
   const readiness = _gdPurchaseReadiness(target, savingsAgorot, walletAgorot);
 
+  const gid = _gdEsc(goal.goalId);
+
   return `
-    <div data-goal-id="${_gdEsc(goal.goalId)}" style="
+    <div data-goal-id="${gid}" style="
       background:rgba(255,255,255,0.7);border-radius:14px;
       padding:10px 10px 8px;
       border:1.5px solid ${readiness.caseKey === 'A' ? '#86EFAC' : 'rgba(0,0,0,0.07)'};
       box-shadow:0 1px 4px rgba(0,0,0,0.06);
       display:flex;flex-direction:column;gap:6px;
-      min-height:0;
+      min-height:0;overflow:hidden;min-width:0;
     ">
       <!-- Emoji + title row -->
       <div style="display:flex;align-items:flex-start;gap:7px;">
@@ -201,18 +239,30 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
           display:flex;align-items:center;justify-content:center;
           font-size:1.4rem;line-height:1;
         ">${goal.emoji}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="
+        <div style="flex:1;min-width:0;overflow:hidden;">
+          <div id="gd-tile-title-${gid}" style="
             font-weight:800;font-size:0.85rem;color:#1E293B;
             white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
             line-height:1.25;
           ">${_gdEsc(goal.title)}</div>
-          <div id="gd-tile-price-${_gdEsc(goal.goalId)}"
+          <!-- Inline name editor (hidden until toggled) -->
+          <div id="gd-tile-name-editor-${gid}" style="display:none;margin-top:4px;">
+            <input class="gd-name-input" data-goal-id="${gid}" type="text" maxlength="40"
+              value="${_gdEsc(goal.title)}"
+              style="width:100%;box-sizing:border-box;padding:5px 8px;font-size:0.78rem;
+                font-weight:700;font-family:inherit;border:1.5px solid #86EFAC;border-radius:8px;
+                background:#F0FDF4;color:var(--color-text);">
+            <button class="gd-name-save-btn" data-goal-id="${gid}" type="button" style="
+              margin-top:3px;width:100%;padding:3px;
+              background:#16A34A;color:#fff;border:none;border-radius:7px;
+              font-size:0.68rem;font-weight:700;font-family:inherit;cursor:pointer;">✓ שמור שם</button>
+          </div>
+          <div id="gd-tile-price-${gid}"
             style="font-size:0.72rem;color:#15803D;font-weight:700;margin-top:1px;">
             ${Currency.formatILS(target)}
           </div>
           <!-- Inline price editor (hidden until toggled) -->
-          <div id="gd-tile-editor-${_gdEsc(goal.goalId)}" style="display:none;margin-top:4px;">
+          <div id="gd-tile-editor-${gid}" style="display:none;margin-top:4px;">
             <div style="position:relative;">
               <input class="gd-price-input" data-goal-id="${_gdEsc(goal.goalId)}"
                 type="number" inputmode="decimal" min="0.01" step="0.01"
@@ -267,31 +317,30 @@ function _gdGoalTileHTML(goal, savingsAgorot, walletAgorot) {
         font-weight:${readiness.caseKey === 'A' ? '700' : '500'};
       ">${readiness.msg}</div>
 
-      <!-- Bottom action links: "✏️ מחיר" | "שנה סמל" -->
-      <div style="display:flex;gap:4px;justify-content:center;align-items:center;">
+      <!-- Bottom action row (legible, two rows on small cards) -->
+      <div style="display:flex;flex-wrap:wrap;gap:2px;justify-content:center;align-items:center;">
+        <button class="gd-change-name-btn" type="button"
+          data-goal-id="${gid}"
+          style="background:none;border:none;color:#475569;font-size:0.75rem;
+            cursor:pointer;padding:2px 4px;font-family:inherit;">✏️ שם</button>
+        <span style="color:#94A3B8;font-size:0.68rem;line-height:1;">|</span>
         <button class="gd-change-price-btn" type="button"
-          data-goal-id="${_gdEsc(goal.goalId)}"
-          style="
-            background:none;border:none;
-            color:#CBD5E1;font-size:0.65rem;
-            cursor:pointer;padding:2px 4px;
-            font-family:inherit;text-decoration:underline;
-            text-underline-offset:2px;
-          "
-        >✏️ מחיר</button>
-        <span style="color:#CBD5E1;font-size:0.6rem;line-height:1;">|</span>
+          data-goal-id="${gid}"
+          style="background:none;border:none;color:#475569;font-size:0.75rem;
+            cursor:pointer;padding:2px 4px;font-family:inherit;">✏️ מחיר</button>
+        <span style="color:#94A3B8;font-size:0.68rem;line-height:1;">|</span>
         <button class="gd-change-icon-btn" type="button"
-          data-goal-id="${_gdEsc(goal.goalId)}"
+          data-goal-id="${gid}"
           data-goal-emoji="${_gdEsc(goal.emoji)}"
           data-goal-title="${_gdEsc(goal.title)}"
-          style="
-            background:none;border:none;
-            color:#CBD5E1;font-size:0.65rem;
-            cursor:pointer;padding:2px 4px;
-            font-family:inherit;text-decoration:underline;
-            text-underline-offset:2px;
-          "
-        >שנה סמל</button>
+          style="background:none;border:none;color:#475569;font-size:0.75rem;
+            cursor:pointer;padding:2px 4px;font-family:inherit;">🎭 סמל</button>
+        <span style="color:#94A3B8;font-size:0.68rem;line-height:1;">|</span>
+        <button disabled type="button" style="
+          background:none;border:none;color:#CBD5E1;font-size:0.72rem;
+          cursor:not-allowed;padding:2px 4px;font-family:inherit;
+        ">📷 <span style="font-size:0.58rem;background:#F1F5F9;color:#94A3B8;
+          padding:1px 3px;border-radius:5px;font-weight:700;">בקרוב</span></button>
       </div>
     </div>`;
 }
@@ -378,7 +427,7 @@ function _gdRenderCreator(el, userId, savingsAgorot, walletAgorot) {
           background:none;border:none;font-size:1.4rem;cursor:pointer;
           padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;
           font-family:inherit;
-        " aria-label="חזרה">←</button>
+        " aria-label="חזרה"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
         <div style="font-size:1.0rem;font-weight:800;color:#15803D;">🎯 מטרה חדשה</div>
       </div>
 
@@ -543,7 +592,7 @@ function _gdRenderChangeIconView(el, userId, savingsAgorot, walletAgorot, goalId
           background:none;border:none;font-size:1.4rem;cursor:pointer;
           padding:4px 8px;border-radius:10px;color:var(--color-text-muted);line-height:1;
           font-family:inherit;
-        " aria-label="חזרה">←</button>
+        " aria-label="חזרה"><span style="display:inline-block;transform:scaleX(-1)">↩</span></button>
         <div style="font-size:1.0rem;font-weight:800;color:#15803D;">🔄 שנה סמל</div>
       </div>
       <p style="font-size:0.82rem;color:#4B7A58;margin:0 0 12px;padding-right:46px;">

@@ -143,3 +143,19 @@ p  { line-height: 1.7; }
 .mt-24 { margin-top: 24px; }
 .mb-8  { margin-bottom: 8px; }
 .mb-16 { margin-bottom: 16px; }
+
+/* ── Animated loading dots (RTL-friendly) ───────────────────── */
+/* Usage: <span>טוען</span><span class="ld-d">.</span><span class="ld-d">.</span><span class="ld-d">.</span> */
+@keyframes ld-blink {
+  0%, 80%, 100% { opacity: 0; }
+  40%            { opacity: 1; }
+}
+.ld-d { animation: ld-blink 1.4s ease-in-out infinite; display: inline-block; }
+.ld-d:nth-child(2) { animation-delay: 0.2s; }
+.ld-d:nth-child(3) { animation-delay: 0.4s; }
+.ld-d:nth-child(4) { animation-delay: 0.6s; }
+
+/* ── Hide number input spinners ─────────────────────────────── */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
