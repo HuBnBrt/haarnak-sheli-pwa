@@ -168,34 +168,38 @@ function _sectionHTML(label, denoms, counts, bg, border, textColor, icon) {
   const pills = active.map(d => {
     const count    = _getCount(counts, d.agorot);
     const subtotal = count * d.agorot;
+    const isCoin   = d.type === 'coin';
+    const imgHTML  = _wdDenomImg(d.agorot, isCoin);
     return `
       <div style="
         background: ${bg};
         border: 1.5px solid ${border};
         border-radius: 12px;
-        padding: 8px 10px;
+        padding: 10px 10px 8px;
         display: inline-flex;
         flex-direction: column;
         align-items: center;
-        gap: 2px;
-        min-width: 60px;
+        gap: 4px;
+        min-width: 64px;
         cursor: default;
       ">
-        <div style="font-size: 1.1rem; line-height: 1;">${icon}</div>
+        <div style="height: 40px; display: flex; align-items: center; justify-content: center;">
+          ${imgHTML || `<span style="font-size: 1.3rem;">${icon}</span>`}
+        </div>
         <div style="
-          font-weight: 800;
-          font-size: 1rem;
+          font-weight: 900;
+          font-size: 1.15rem;
           color: ${textColor};
-          line-height: 1.1;
-        ">${count}×</div>
+          line-height: 1;
+        ">${count}</div>
         <div style="
-          font-size: 0.77rem;
+          font-size: 0.8rem;
           color: ${textColor};
-          font-weight: 600;
+          font-weight: 700;
           white-space: nowrap;
         ">${_wdEsc(d.labelHe)}</div>
         <div style="
-          font-size: 0.7rem;
+          font-size: 0.72rem;
           color: ${textColor};
           opacity: 0.65;
           white-space: nowrap;
@@ -317,17 +321,13 @@ function _renderEditorForm(el, userId, counts) {
           min-width: 90px;
         ">
           <div style="
-            width: 44px;
-            height: 44px;
-            border-radius: ${isCoin ? '50%' : '10px'};
-            background: ${bg};
-            border: 2px solid ${border};
+            width: 52px;
+            height: 52px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
             flex-shrink: 0;
-          ">${icon}</div>
+          ">${_wdDenomImg(d.agorot, isCoin) || `<span style="font-size:1.4rem;">${icon}</span>`}</div>
           <div>
             <div style="
               font-weight: 800;
@@ -637,6 +637,26 @@ function _calcEditorTotal(el, counts) {
 function _getCount(counts, agorot) {
   const v = counts[agorot] != null ? counts[agorot] : (counts[String(agorot)] ?? 0);
   return Math.max(0, parseInt(v, 10) || 0);
+}
+
+/** Maps a denomination's agorot value to a relative image path for GitHub Pages. */
+function _wdDenomImg(agorot, isCoin) {
+  const MAP = {
+    10:    './gfx/Agorot-10.png',
+    50:    './gfx/Agorot-50.png',
+    100:   './gfx/Sheqel-001.png',
+    200:   './gfx/Sheqel-002.png',
+    500:   './gfx/Sheqel-005.png',
+    1000:  './gfx/Sheqel-010.png',
+    2000:  './gfx/Sheqel-020.png',
+    5000:  './gfx/Sheqel-050.png',
+    10000: './gfx/Sheqel-100.png',
+    20000: './gfx/Sheqel-200.png',
+  };
+  const src = MAP[agorot];
+  if (!src) return '';
+  const h = isCoin ? 38 : 26;
+  return `<img src="${src}" style="height:${h}px;width:auto;max-width:48px;display:block;object-fit:contain;" alt="" draggable="false" loading="lazy">`;
 }
 
 function _wdEsc(str) {

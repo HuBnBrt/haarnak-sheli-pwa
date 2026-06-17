@@ -594,7 +594,7 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
       ">
         <!-- RIGHT: how many are still in wallet -->
         <div style="flex:1;text-align:center;min-width:0;padding:0 4px;">
-          <div style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);
+          <div style="font-size:0.7rem;font-weight:700;color:var(--color-text-muted);
             margin-bottom:2px;white-space:nowrap;">יש לי בארנק</div>
           <div id="ph-avl-${d.agorot}"
             style="font-size:1.5rem;font-weight:900;color:var(--color-text);line-height:1;">
@@ -602,10 +602,10 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
           </div>
         </div>
 
-        <!-- ← take one from wallet, add to payment -->
-        <button class="ph-add" id="ph-add-${d.agorot}" data-denom="${d.agorot}"
-          type="button" aria-label="העבר לתשלום"
-          style="${_phTransferBtnStyle(true)}" ${max === 0 ? 'disabled' : ''}>←</button>
+        <!-- → return one from payment back to wallet (RIGHT of image in RTL) -->
+        <button class="ph-ret" id="ph-ret-${d.agorot}" data-denom="${d.agorot}"
+          type="button" aria-label="החזר לארנק"
+          style="${_phTransferBtnStyle(false)}" disabled>→</button>
 
         <!-- CENTER: coin/bill image + label (visual identity only) -->
         <div style="
@@ -618,18 +618,18 @@ function _phStep2Render(el, userId, gender, onExit, priceAgorot, description, wa
                 alt="" draggable="false" loading="lazy">`
             : `<span style="font-size:0.85rem;font-weight:800;">${_phEsc(d.labelHe)}</span>`
           }
-          <span style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);
+          <span style="font-size:0.7rem;font-weight:700;color:var(--color-text-muted);
             white-space:nowrap;">${_phEsc(d.labelHe)}</span>
         </div>
 
-        <!-- → return one from payment back to wallet -->
-        <button class="ph-ret" id="ph-ret-${d.agorot}" data-denom="${d.agorot}"
-          type="button" aria-label="החזר לארנק"
-          style="${_phTransferBtnStyle(false)}" disabled>→</button>
+        <!-- ← take one from wallet, add to payment (LEFT of image in RTL) -->
+        <button class="ph-add" id="ph-add-${d.agorot}" data-denom="${d.agorot}"
+          type="button" aria-label="העבר לתשלום"
+          style="${_phTransferBtnStyle(true)}" ${max === 0 ? 'disabled' : ''}>←</button>
 
         <!-- LEFT: how many selected for payment -->
         <div style="flex:1;text-align:center;min-width:0;padding:0 4px;">
-          <div style="font-size:0.6rem;font-weight:700;color:var(--color-text-muted);
+          <div style="font-size:0.7rem;font-weight:700;color:var(--color-text-muted);
             margin-bottom:2px;white-space:nowrap;">בחרתי לשלם</div>
           <div id="ph-sel-${d.agorot}"
             style="font-size:1.5rem;font-weight:900;color:#16A34A;line-height:1;">
@@ -1299,16 +1299,16 @@ function _phEsc(str) {
 /** Maps a denomination's agorot value to its image path. Returns null if no image. */
 function _phDenomImgSrc(agorot) {
   const MAP = {
-    10:    '/gfx/Agorot-10.png',
-    50:    '/gfx/Agorot-50.png',
-    100:   '/gfx/Sheqel-001.png',
-    200:   '/gfx/Sheqel-002.png',
-    500:   '/gfx/Sheqel-005.png',
-    1000:  '/gfx/Sheqel-010.png',
-    2000:  '/gfx/Sheqel-020.png',
-    5000:  '/gfx/Sheqel-050.png',
-    10000: '/gfx/Sheqel-100.png',
-    20000: '/gfx/Sheqel-200.png',
+    10:    './gfx/Agorot-10.png',
+    50:    './gfx/Agorot-50.png',
+    100:   './gfx/Sheqel-001.png',
+    200:   './gfx/Sheqel-002.png',
+    500:   './gfx/Sheqel-005.png',
+    1000:  './gfx/Sheqel-010.png',
+    2000:  './gfx/Sheqel-020.png',
+    5000:  './gfx/Sheqel-050.png',
+    10000: './gfx/Sheqel-100.png',
+    20000: './gfx/Sheqel-200.png',
   };
   return MAP[agorot] || null;
 }
@@ -1483,16 +1483,17 @@ function _phSectionLabelStyle() {
 }
 /**
  * Style for the ← / → transfer buttons in Step 2 denomination cards.
- * isAdd=true → blue (move into payment); isAdd=false → muted green (return to wallet).
+ * isAdd=true  → GREEN  (← move into payment)
+ * isAdd=false → RED    (→ return to wallet)
  */
 function _phTransferBtnStyle(isAdd) {
   return `
     width:44px;height:44px;border-radius:12px;flex-shrink:0;
-    border:2px solid ${isAdd ? '#BFDBFE' : '#D1FAE5'};
-    background:${isAdd ? '#EFF6FF' : '#ECFDF5'};
+    border:2px solid ${isAdd ? '#BBF7D0' : '#FECACA'};
+    background:${isAdd ? '#DCFCE7' : '#FEE2E2'};
     font-size:1.2rem;font-weight:700;cursor:pointer;
     display:flex;align-items:center;justify-content:center;
-    color:${isAdd ? '#1D4ED8' : '#059669'};
+    color:${isAdd ? '#15803D' : '#DC2626'};
     font-family:inherit;transition:opacity 0.1s;
   `;
 }
